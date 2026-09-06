@@ -2,3 +2,8 @@ openai-agents
 pydantic
 python-dotenv
 pytest
+
+pandas
+openpyxl
+duckdb
+psycopg[binary]
