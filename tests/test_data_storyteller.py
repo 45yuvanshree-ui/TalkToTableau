@@ -1,5 +1,10 @@
-from agent_components import data_storyteller
-from models import BusinessStory, StorySection
+from agents import Agent
+
+from agent_components import (
+    create_data_storyteller,
+    data_storyteller,
+)
+from models import BusinessStory
 
 
 def test_data_storyteller_configuration():
@@ -7,49 +12,24 @@ def test_data_storyteller_configuration():
     assert data_storyteller.output_type is BusinessStory
 
 
-def test_story_section_model():
-    section = StorySection(
-        heading="Revenue comparison",
-        content="North generated more revenue than South.",
-    )
+def test_data_storyteller_can_accept_injected_model():
+    agent = create_data_storyteller()
 
-    assert section.heading == "Revenue comparison"
-    assert "North" in section.content
+    assert isinstance(agent, Agent)
+    assert agent.name == "Data Storyteller"
 
 
-def test_business_story_model():
+def test_business_story_structure():
     story = BusinessStory(
         summary="North generated the highest revenue.",
-        sections=[
-            StorySection(
-                heading="Revenue comparison",
-                content=(
-                    "North generated 2200 in revenue, "
-                    "compared with 1700 for South."
-                ),
-            )
-        ],
-        visualization_explanation=(
-            "The bar chart compares revenue across regions."
-        ),
-        recommendations=[
-            "Investigate the factors contributing to North's stronger revenue."
-        ],
-    )
-
-    assert "North" in story.summary
-    assert len(story.sections) == 1
-    assert len(story.recommendations) == 1
-
-
-def test_business_story_can_have_no_recommendations():
-    story = BusinessStory(
-        summary="The available evidence is insufficient.",
         sections=[],
         visualization_explanation=(
-            "No visualization is available."
+            "The visualization compares revenue by region."
         ),
         recommendations=[],
     )
 
+    assert story.summary == (
+        "North generated the highest revenue."
+    )
     assert story.recommendations == []

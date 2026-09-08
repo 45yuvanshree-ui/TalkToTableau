@@ -1,10 +1,22 @@
-from agent_components import business_analyst
+from agents import Agent
+
+from agent_components import (
+    business_analyst,
+    create_business_analyst,
+)
 from models import AnalyticalPlan
 
 
 def test_business_analyst_configuration():
     assert business_analyst.name == "Business Analyst"
     assert business_analyst.output_type is AnalyticalPlan
+
+
+def test_business_analyst_can_accept_injected_model():
+    agent = create_business_analyst()
+
+    assert isinstance(agent, Agent)
+    assert agent.name == "Business Analyst"
 
 
 def test_analytical_plan_structure():

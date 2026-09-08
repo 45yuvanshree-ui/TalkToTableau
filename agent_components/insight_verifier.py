@@ -1,4 +1,4 @@
-from agents import Agent
+from agents import Agent, Model
 
 from models import InsightAnalysis
 
@@ -46,8 +46,20 @@ The output must be a structured InsightAnalysis.
 """
 
 
-insight_verifier = Agent(
-    name="Insight and Evidence Verifier",
-    instructions=INSIGHT_VERIFIER_INSTRUCTIONS,
-    output_type=InsightAnalysis,
-)
+def create_insight_verifier(
+    model: Model | None = None,
+) -> Agent:
+    """
+    Create the Insight and Evidence Verification agent with
+    an optional model.
+    """
+
+    return Agent(
+        name="Insight and Evidence Verifier",
+        instructions=INSIGHT_VERIFIER_INSTRUCTIONS,
+        output_type=InsightAnalysis,
+        model=model,
+    )
+
+
+insight_verifier = create_insight_verifier()

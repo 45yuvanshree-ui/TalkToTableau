@@ -1,4 +1,4 @@
-from agents import Agent
+from agents import Agent, Model
 
 from models import BusinessStory
 
@@ -39,8 +39,19 @@ The output must be a structured BusinessStory.
 """
 
 
-data_storyteller = Agent(
-    name="Data Storyteller",
-    instructions=DATA_STORYTELLER_INSTRUCTIONS,
-    output_type=BusinessStory,
-)
+def create_data_storyteller(
+    model: Model | None = None,
+) -> Agent:
+    """
+    Create the Data Storytelling agent with an optional model.
+    """
+
+    return Agent(
+        name="Data Storyteller",
+        instructions=DATA_STORYTELLER_INSTRUCTIONS,
+        output_type=BusinessStory,
+        model=model,
+    )
+
+
+data_storyteller = create_data_storyteller()

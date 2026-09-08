@@ -1,4 +1,4 @@
-from agents import Agent
+from agents import Agent, Model
 
 from models import AnalyticalPlan
 
@@ -41,8 +41,23 @@ The output must be a structured AnalyticalPlan.
 """
 
 
-business_analyst = Agent(
-    name="Business Analyst",
-    instructions=BUSINESS_ANALYST_INSTRUCTIONS,
-    output_type=AnalyticalPlan,
-)
+def create_business_analyst(
+    model: Model | None = None,
+) -> Agent:
+    """
+    Create the Business Analyst agent with an optional model.
+
+    When a model is supplied by the adaptive routing layer,
+    the agent uses that model. Otherwise, the Agents SDK default
+    model configuration is used.
+    """
+
+    return Agent(
+        name="Business Analyst",
+        instructions=BUSINESS_ANALYST_INSTRUCTIONS,
+        output_type=AnalyticalPlan,
+        model=model,
+    )
+
+
+business_analyst = create_business_analyst()
