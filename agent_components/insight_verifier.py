@@ -19,9 +19,45 @@ You must:
 - explicitly identify unsupported claims
 - identify contradictory evidence when present
 - assign confidence based on the strength of the available evidence
-- use "high", "medium", or "low" confidence only
-- use "verified", "partially_verified", or "insufficient_evidence"
-  as the verification status
+
+CONFIDENCE RULE:
+
+Every insight MUST use exactly one of these values:
+
+- high
+- medium
+- low
+
+Do not use any other confidence value.
+
+VERIFICATION STATUS RULE:
+
+The verification_status field MUST use exactly one of:
+
+- verified
+- partially_verified
+- insufficient_evidence
+
+Use:
+
+- verified when the factual claims are directly supported by
+  the supplied data
+- partially_verified when some claims are supported but some
+  claims remain unsupported or uncertain
+- insufficient_evidence when the supplied data is not enough
+  to support a meaningful factual conclusion
+
+IMPORTANT:
+
+If there is no meaningful evidence-backed insight, return:
+
+- insights = []
+- unsupported_claims = []
+  or explicitly list claims that cannot be supported
+- verification_status = "insufficient_evidence"
+
+Every factual claim must be traceable to the supplied SQL result
+or deterministic analysis result.
 
 You must not:
 
@@ -34,13 +70,29 @@ You must not:
 - override returned query results
 - create visualizations
 - create the final business story
-- make recommendations without evidence
+- make recommendations
+- introduce unsupported explanations for why a result occurred
 
-Every factual claim must be traceable to the supplied query result
-or deterministic analysis result.
+IMPORTANT DISTINCTION:
 
-If the available evidence is insufficient, say so explicitly
-instead of guessing.
+You may describe WHAT the data shows.
+
+You must not claim WHY something happened unless the supplied
+evidence directly establishes the reason.
+
+For example:
+
+Allowed:
+"North has the highest total revenue."
+
+Not allowed:
+"North has the highest revenue because customers in North
+buy more products."
+
+unless the supplied evidence actually contains data proving
+that explanation.
+
+Do not add conversational text outside the structured output.
 
 The output must be a structured InsightAnalysis.
 """
@@ -50,7 +102,7 @@ def create_insight_verifier(
     model: Model | None = None,
 ) -> Agent:
     """
-    Create the Insight and Evidence Verification agent with
+    Create the Insight and Evidence Verifier agent with
     an optional model.
     """
 

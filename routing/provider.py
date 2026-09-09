@@ -14,6 +14,13 @@ class LLMProviderConfig:
     variables.
 
     This class does not make an LLM request.
+
+    For local Ollama:
+    - FAST uses OLLAMA_FAST_MODEL.
+    - BALANCED uses OLLAMA_BALANCED_MODEL when configured.
+    - REASONING uses OLLAMA_REASONING_MODEL when configured.
+    - If BALANCED or REASONING is not configured, the FAST model
+      is used as a local fallback.
     """
 
     def __init__(self) -> None:
@@ -89,31 +96,44 @@ class LLMProviderConfig:
     def _get_local_model(
         tier: ModelTier,
     ) -> str:
-        """Resolve a model for the local Ollama provider."""
+        """
+        Resolve a model for the local Ollama provider.
+
+        Explicit tier-specific models take priority.
+
+        If BALANCED or REASONING is not configured, the configured
+        FAST model is used as a fallback. This is useful when the
+        local environment has only one installed model.
+        """
+
+        fast_model = os.getenv(
+            "OLLAMA_FAST_MODEL",
+            "",
+        ).strip()
+
+        if not fast_model:
+            raise ValueError(
+                "OLLAMA_FAST_MODEL is not configured."
+            )
 
         model_map = {
             ModelTier.FAST: (
                 "OLLAMA_FAST_MODEL",
-                os.getenv("OLLAMA_FAST_MODEL", ""),
+                fast_model,
             ),
             ModelTier.BALANCED: (
                 "OLLAMA_BALANCED_MODEL",
-                os.getenv("OLLAMA_BALANCED_MODEL", ""),
+                os.getenv("OLLAMA_BALANCED_MODEL", "").strip()
+                or fast_model,
             ),
             ModelTier.REASONING: (
                 "OLLAMA_REASONING_MODEL",
-                os.getenv("OLLAMA_REASONING_MODEL", ""),
+                os.getenv("OLLAMA_REASONING_MODEL", "").strip()
+                or fast_model,
             ),
         }
 
-        environment_name, model = model_map[tier]
-
-        model = model.strip()
-
-        if not model:
-            raise ValueError(
-                f"{environment_name} is not configured."
-            )
+        _environment_name, model = model_map[tier]
 
         return model
 

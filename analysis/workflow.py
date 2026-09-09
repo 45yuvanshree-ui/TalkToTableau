@@ -47,6 +47,13 @@ class AnalysisWorkflow:
                 metric=plan.metrics[0],
             )
 
+        if self._requires_comparison(plan):
+            comparison = self._comparison(
+                dataframe=dataframe,
+                dimension=plan.dimensions[0],
+                metric=plan.metrics[0],
+            )
+
         if self._requires_trend(plan) and plan.metrics:
             trend = self._trend(
                 dataframe=dataframe,
@@ -67,7 +74,9 @@ class AnalysisWorkflow:
         )
 
     @staticmethod
-    def _to_dataframe(sql_result: SQLResult) -> pd.DataFrame:
+    def _to_dataframe(
+        sql_result: SQLResult,
+    ) -> pd.DataFrame:
         """Convert SQLResult into a DataFrame."""
 
         return pd.DataFrame(
@@ -76,53 +85,230 @@ class AnalysisWorkflow:
         )
 
     @staticmethod
-    def _requires_trend(plan: AnalyticalPlan) -> bool:
-        """Determine whether trend analysis was requested."""
+    def _normalize_name(value: str) -> str:
+        """
+        Normalize a field name for deterministic matching.
 
-        objective = plan.analytical_objective.lower()
+        Examples:
 
-        return (
-            "trend" in objective
-            or "time" in objective
-            or plan.time_range is not None
+        total revenue -> total_revenue
+        Total Revenue -> total_revenue
+        total-revenue -> total_revenue
+        """
+
+        import re
+
+        normalized = value.strip().lower()
+
+        normalized = re.sub(
+            r"[^a-z0-9]+",
+            "_",
+            normalized,
         )
 
-    @staticmethod
-    def _requires_anomaly(plan: AnalyticalPlan) -> bool:
-        """Determine whether anomaly analysis was requested."""
+        normalized = re.sub(
+            r"_+",
+            "_",
+            normalized,
+        )
+
+        return normalized.strip("_")
+
+    @classmethod
+    def _find_matching_column(
+        cls,
+        requested_name: str,
+        dataframe: pd.DataFrame,
+    ) -> str | None:
+        """
+        Resolve a requested analytical field to an actual
+        SQL result column.
+        """
+
+        requested_normalized = cls._normalize_name(
+            requested_name
+        )
+
+        # --------------------------------------------------
+        # 1. Exact normalized match
+        # --------------------------------------------------
+
+        for column in dataframe.columns:
+            if (
+                cls._normalize_name(str(column))
+                == requested_normalized
+            ):
+                return str(column)
+
+        # --------------------------------------------------
+        # 2. Aggregation-aware matching
+        # --------------------------------------------------
+
+        aggregation_words = {
+            "total",
+            "sum",
+            "average",
+            "avg",
+            "mean",
+            "count",
+            "maximum",
+            "max",
+            "minimum",
+            "min",
+        }
+
+        requested_tokens = set(
+            requested_normalized.split("_")
+        )
+
+        requested_base_tokens = (
+            requested_tokens - aggregation_words
+        )
+
+        if requested_base_tokens:
+            for column in dataframe.columns:
+                column_normalized = cls._normalize_name(
+                    str(column)
+                )
+
+                column_tokens = set(
+                    column_normalized.split("_")
+                )
+
+                column_base_tokens = (
+                    column_tokens - aggregation_words
+                )
+
+                if (
+                    requested_base_tokens
+                    == column_base_tokens
+                ):
+                    return str(column)
+
+        return None
+
+    @classmethod
+    def _requires_comparison(
+        cls,
+        plan: AnalyticalPlan,
+    ) -> bool:
+        """
+        Determine whether the analytical plan represents a
+        categorical comparison.
+
+        A request such as:
+
+        "total revenue by region"
+
+        is a comparison even if the LLM does not explicitly
+        populate the comparison field.
+        """
+
+        if not plan.dimensions or not plan.metrics:
+            return False
 
         objective = plan.analytical_objective.lower()
 
-        return "anomal" in objective
+        comparison_keywords = {
+            "comparison",
+            "compare",
+            "comparison of",
+            "by",
+            "ranking",
+            "rank",
+            "highest",
+            "lowest",
+            "top",
+            "bottom",
+            "distribution",
+        }
 
-    @staticmethod
+        return (
+            plan.comparison is not None
+            or any(
+                keyword in objective
+                for keyword in comparison_keywords
+            )
+        )
+
+    @classmethod
+    def _resolve_metric(
+        cls,
+        dataframe: pd.DataFrame,
+        metric: str,
+    ) -> str:
+        """
+        Resolve the metric requested by Agent 1 to an actual
+        SQL result column.
+        """
+
+        resolved = cls._find_matching_column(
+            requested_name=metric,
+            dataframe=dataframe,
+        )
+
+        if resolved is not None:
+            return resolved
+
+        raise ValueError(
+            f"Analysis metric not found in SQL result: {metric}"
+        )
+
+    @classmethod
+    def _resolve_dimension(
+        cls,
+        dataframe: pd.DataFrame,
+        dimension: str,
+    ) -> str:
+        """
+        Resolve the requested dimension to an actual SQL
+        result column.
+        """
+
+        resolved = cls._find_matching_column(
+            requested_name=dimension,
+            dataframe=dataframe,
+        )
+
+        if resolved is not None:
+            return resolved
+
+        raise ValueError(
+            f"Analysis dimension not found in SQL result: {dimension}"
+        )
+
+    @classmethod
     def _comparison(
+        cls,
         dataframe: pd.DataFrame,
         dimension: str,
         metric: str,
     ) -> ComparisonAnalysis:
         """Aggregate a metric by a requested dimension."""
 
-        if dimension not in dataframe.columns:
-            raise ValueError(
-                f"Comparison dimension not found: {dimension}"
-            )
+        resolved_dimension = cls._resolve_dimension(
+            dataframe=dataframe,
+            dimension=dimension,
+        )
 
-        if metric not in dataframe.columns:
-            raise ValueError(
-                f"Comparison metric not found: {metric}"
-            )
+        resolved_metric = cls._resolve_metric(
+            dataframe=dataframe,
+            metric=metric,
+        )
 
         numeric_metric = pd.to_numeric(
-            dataframe[metric],
+            dataframe[resolved_metric],
             errors="coerce",
         )
 
         working = dataframe.copy()
+
         working["_analysis_metric"] = numeric_metric
 
         grouped = (
-            working.groupby(dimension)["_analysis_metric"]
+            working.groupby(
+                resolved_dimension
+            )["_analysis_metric"]
             .sum()
             .dropna()
         )
@@ -133,13 +319,14 @@ class AnalysisWorkflow:
         }
 
         return ComparisonAnalysis(
-            dimension=dimension,
-            metric=metric,
+            dimension=resolved_dimension,
+            metric=resolved_metric,
             values=values,
         )
 
-    @staticmethod
+    @classmethod
     def _trend(
+        cls,
         dataframe: pd.DataFrame,
         metric: str,
     ) -> TrendAnalysis:
@@ -147,12 +334,12 @@ class AnalysisWorkflow:
         Analyze a metric across the first suitable time-like column.
         """
 
-        if metric not in dataframe.columns:
-            raise ValueError(
-                f"Trend metric not found: {metric}"
-            )
+        resolved_metric = cls._resolve_metric(
+            dataframe=dataframe,
+            metric=metric,
+        )
 
-        time_column = AnalysisWorkflow._find_time_column(
+        time_column = cls._find_time_column(
             dataframe
         )
 
@@ -169,16 +356,21 @@ class AnalysisWorkflow:
         )
 
         working["_analysis_metric"] = pd.to_numeric(
-            working[metric],
+            working[resolved_metric],
             errors="coerce",
         )
 
         working = working.dropna(
-            subset=["_analysis_time", "_analysis_metric"]
+            subset=[
+                "_analysis_time",
+                "_analysis_metric",
+            ]
         )
 
         grouped = (
-            working.groupby("_analysis_time")["_analysis_metric"]
+            working.groupby(
+                "_analysis_time"
+            )["_analysis_metric"]
             .sum()
             .sort_index()
         )
@@ -193,56 +385,109 @@ class AnalysisWorkflow:
 
         return TrendAnalysis(
             time_dimension=time_column,
-            metric=metric,
+            metric=resolved_metric,
             values=values,
         )
 
-    @staticmethod
+    @classmethod
     def _anomaly(
+        cls,
         dataframe: pd.DataFrame,
         metric: str,
     ) -> AnomalyAnalysis:
         """Detect statistical outliers using a three-standard-deviation rule."""
 
-        if metric not in dataframe.columns:
-            raise ValueError(
-                f"Anomaly metric not found: {metric}"
-            )
+        resolved_metric = cls._resolve_metric(
+            dataframe=dataframe,
+            metric=metric,
+        )
 
         numeric_values = pd.to_numeric(
-            dataframe[metric],
+            dataframe[resolved_metric],
             errors="coerce",
         )
 
         valid_values = numeric_values.dropna()
 
         if valid_values.empty:
-            return AnomalyAnalysis(metric=metric)
+            return AnomalyAnalysis(
+                metric=resolved_metric
+            )
 
         mean = float(valid_values.mean())
-        standard_deviation = float(valid_values.std(ddof=0))
+
+        standard_deviation = float(
+            valid_values.std(
+                ddof=0
+            )
+        )
 
         if standard_deviation == 0:
-            anomalous_rows: list[dict[str, object]] = []
+            anomalous_rows: list[
+                dict[str, object]
+            ] = []
+
         else:
             mask = (
-                (numeric_values - mean).abs()
+                (
+                    numeric_values
+                    - mean
+                ).abs()
                 > 3 * standard_deviation
             )
 
+            selected_rows = dataframe.loc[
+                mask.fillna(False)
+            ]
+
             anomalous_rows = (
-                dataframe.loc[mask.fillna(False)]
+                selected_rows
                 .astype(object)
-                .where(dataframe.loc[mask.fillna(False)].notna(), None)
-                .to_dict(orient="records")
+                .where(
+                    selected_rows.notna(),
+                    None,
+                )
+                .to_dict(
+                    orient="records"
+                )
             )
 
         return AnomalyAnalysis(
-            metric=metric,
+            metric=resolved_metric,
             mean=mean,
             standard_deviation=standard_deviation,
             anomalous_rows=anomalous_rows,
         )
+
+    @staticmethod
+    def _requires_trend(
+        plan: AnalyticalPlan,
+    ) -> bool:
+        """Determine whether trend analysis was requested."""
+
+        objective = (
+            plan.analytical_objective
+            .lower()
+        )
+
+        return (
+            "trend" in objective
+            or "time" in objective
+            or plan.time_range is not None
+        )
+
+    @staticmethod
+    def _requires_anomaly(
+        plan: AnalyticalPlan,
+    ) -> bool:
+        """Determine whether anomaly analysis was requested."""
+
+        objective = (
+            plan.analytical_objective
+            .lower()
+        )
+
+        return "anomal" in objective
 
     @staticmethod
     def _find_time_column(
@@ -275,7 +520,10 @@ class AnalysisWorkflow:
                 errors="coerce",
             )
 
-            if converted.notna().mean() >= 0.8:
+            if (
+                converted.notna().mean()
+                >= 0.8
+            ):
                 return str(column)
 
         return None

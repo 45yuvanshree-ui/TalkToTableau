@@ -61,11 +61,16 @@ class SQLExecutor:
         return self._to_result(dataframe)
 
     @staticmethod
-    def _to_result(dataframe: pd.DataFrame) -> SQLResult:
+    def _to_result(
+        dataframe: pd.DataFrame,
+    ) -> SQLResult:
         """Convert a DataFrame into a structured SQL result."""
 
         return SQLResult(
-            columns=[str(column) for column in dataframe.columns],
+            columns=[
+                str(column)
+                for column in dataframe.columns
+            ],
             rows=dataframe.astype(object).where(
                 dataframe.notna(),
                 None,

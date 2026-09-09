@@ -1,5 +1,7 @@
 import re
 
+from models import AnalyticalPlan
+
 from .models import SQLValidationResult
 
 
@@ -36,7 +38,6 @@ def validate_sql(query: str) -> SQLValidationResult:
 
     normalized = query.strip()
 
-    # Remove a trailing semicolon for consistent processing.
     normalized = normalized.rstrip(";").strip()
 
     if not normalized:
@@ -46,7 +47,6 @@ def validate_sql(query: str) -> SQLValidationResult:
             reason="SQL query is empty.",
         )
 
-    # Reject multiple statements.
     if ";" in normalized:
         return SQLValidationResult(
             is_valid=False,
@@ -54,7 +54,6 @@ def validate_sql(query: str) -> SQLValidationResult:
             reason="Multiple SQL statements are not allowed.",
         )
 
-    # Remove SQL comments before checking the statement.
     without_comments = re.sub(
         r"--.*?$",
         "",
@@ -76,26 +75,81 @@ def validate_sql(query: str) -> SQLValidationResult:
             reason="SQL query contains no executable statement.",
         )
 
-    # V1 only permits SELECT statements.
-    if not re.match(r"^SELECT\b", without_comments, re.IGNORECASE):
+    if not re.match(
+        r"^SELECT\b",
+        without_comments,
+        re.IGNORECASE,
+    ):
         return SQLValidationResult(
             is_valid=False,
             normalized_query=normalized,
             reason="Only SELECT statements are allowed.",
         )
 
-    # Reject dangerous SQL keywords anywhere in the query.
     for statement in FORBIDDEN_STATEMENTS:
         pattern = rf"\b{statement}\b"
 
-        if re.search(pattern, without_comments, re.IGNORECASE):
+        if re.search(
+            pattern,
+            without_comments,
+            re.IGNORECASE,
+        ):
             return SQLValidationResult(
                 is_valid=False,
                 normalized_query=normalized,
-                reason=f"Forbidden SQL statement detected: {statement}.",
+                reason=(
+                    "Forbidden SQL statement detected: "
+                    f"{statement}."
+                ),
             )
 
     return SQLValidationResult(
         is_valid=True,
         normalized_query=normalized,
+    )
+
+
+def validate_sql_against_plan(
+    query: str,
+    plan: AnalyticalPlan,
+) -> SQLValidationResult:
+    """
+    Validate generated SQL against the analytical plan.
+
+    This prevents the SQL generator from introducing analytical
+    constraints that were not requested.
+
+    V1 specifically protects against hallucinated WHERE filters.
+    """
+
+    validation = validate_sql(query)
+
+    if not validation.is_valid:
+        return validation
+
+    normalized_query = validation.normalized_query
+
+    has_where_clause = bool(
+        re.search(
+            r"\bWHERE\b",
+            normalized_query,
+            re.IGNORECASE,
+        )
+    )
+
+    filters = plan.filters or []
+
+    if not filters and has_where_clause:
+        return SQLValidationResult(
+            is_valid=False,
+            normalized_query=normalized_query,
+            reason=(
+                "Generated SQL contains a WHERE clause, "
+                "but the analytical plan contains no filters."
+            ),
+        )
+
+    return SQLValidationResult(
+        is_valid=True,
+        normalized_query=normalized_query,
     )

@@ -1,5 +1,7 @@
 import re
 
+from pydantic import BaseModel
+
 
 PROMPT_INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?previous\s+instructions",
@@ -12,6 +14,11 @@ PROMPT_INJECTION_PATTERNS = [
     r"developer\s+message",
     r"jailbreak",
 ]
+
+
+class InputValidationResult(BaseModel):
+    is_valid: bool
+    reason: str | None = None
 
 
 def validate_user_input(user_input: str) -> tuple[bool, str | None]:
@@ -32,3 +39,16 @@ def validate_user_input(user_input: str) -> tuple[bool, str | None]:
             return False, "Potential prompt injection detected."
 
     return True, None
+
+
+def validate_input(user_input: str) -> InputValidationResult:
+    """
+    Structured input validation interface used by the orchestration workflow.
+    """
+
+    is_valid, reason = validate_user_input(user_input)
+
+    return InputValidationResult(
+        is_valid=is_valid,
+        reason=reason,
+    )

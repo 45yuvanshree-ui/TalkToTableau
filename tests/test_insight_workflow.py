@@ -77,7 +77,9 @@ def test_valid_verified_output_is_accepted():
         verification_status="verified",
     )
 
-    validated = InsightVerificationWorkflow.validate_output(result)
+    validated = InsightVerificationWorkflow.validate_output(
+        result
+    )
 
     assert validated.verification_status == "verified"
 
@@ -114,3 +116,288 @@ def test_unsupported_evidence_cannot_be_used_for_insight():
 
     with pytest.raises(ValueError):
         InsightVerificationWorkflow.validate_output(result)
+
+
+def test_correct_highest_claim_is_preserved():
+    result = InsightAnalysis(
+        insights=[
+            Insight(
+                statement="North has the highest revenue.",
+                evidence=[
+                    Evidence(
+                        claim="North has the highest revenue.",
+                        supporting_data=(
+                            "North revenue is 60000, greater than "
+                            "all other returned regional values."
+                        ),
+                        is_supported=True,
+                    )
+                ],
+                confidence="high",
+            )
+        ],
+        unsupported_claims=[],
+        verification_status="verified",
+    )
+
+    sql_result = SQLResult(
+        columns=["region", "revenue"],
+        rows=[
+            ["North", 60000],
+            ["East", 31800],
+            ["West", 33600],
+            ["South", 55600],
+        ],
+        row_count=4,
+    )
+
+    validated = (
+        InsightVerificationWorkflow
+        .validate_against_sql_result(
+            result=result,
+            sql_result=sql_result,
+        )
+    )
+
+    assert validated.verification_status == "verified"
+    assert validated.unsupported_claims == []
+
+
+def test_incorrect_second_highest_claim_is_detected():
+    result = InsightAnalysis(
+        insights=[
+            Insight(
+                statement="East has the second-highest total revenue.",
+                evidence=[
+                    Evidence(
+                        claim=(
+                            "East has the second-highest "
+                            "total revenue."
+                        ),
+                        supporting_data=(
+                            "East has total revenue of 31800."
+                        ),
+                        is_supported=True,
+                    )
+                ],
+                confidence="high",
+            )
+        ],
+        unsupported_claims=[],
+        verification_status="verified",
+    )
+
+    sql_result = SQLResult(
+        columns=["region", "total_revenue"],
+        rows=[
+            ["North", 60000],
+            ["East", 31800],
+            ["West", 33600],
+            ["South", 55600],
+        ],
+        row_count=4,
+    )
+
+    validated = (
+        InsightVerificationWorkflow
+        .validate_against_sql_result(
+            result=result,
+            sql_result=sql_result,
+        )
+    )
+
+    assert validated.verification_status == "partially_verified"
+
+    assert (
+        "East has the second-highest total revenue."
+        in validated.unsupported_claims
+    )
+
+
+def test_incorrect_fourth_highest_claim_is_detected():
+    result = InsightAnalysis(
+        insights=[
+            Insight(
+                statement="South has the fourth-highest total revenue.",
+                evidence=[
+                    Evidence(
+                        claim=(
+                            "South has the fourth-highest "
+                            "total revenue."
+                        ),
+                        supporting_data=(
+                            "South has total revenue of 55600."
+                        ),
+                        is_supported=True,
+                    )
+                ],
+                confidence="high",
+            )
+        ],
+        unsupported_claims=[],
+        verification_status="verified",
+    )
+
+    sql_result = SQLResult(
+        columns=["region", "total_revenue"],
+        rows=[
+            ["North", 60000],
+            ["East", 31800],
+            ["West", 33600],
+            ["South", 55600],
+        ],
+        row_count=4,
+    )
+
+    validated = (
+        InsightVerificationWorkflow
+        .validate_against_sql_result(
+            result=result,
+            sql_result=sql_result,
+        )
+    )
+
+    assert validated.verification_status == "partially_verified"
+
+    assert (
+        "South has the fourth-highest total revenue."
+        in validated.unsupported_claims
+    )
+
+
+def test_correct_lowest_claim_is_preserved():
+    result = InsightAnalysis(
+        insights=[
+            Insight(
+                statement="East has the lowest total revenue.",
+                evidence=[
+                    Evidence(
+                        claim="East has the lowest total revenue.",
+                        supporting_data=(
+                            "East has total revenue of 31800, "
+                            "the lowest returned value."
+                        ),
+                        is_supported=True,
+                    )
+                ],
+                confidence="high",
+            )
+        ],
+        unsupported_claims=[],
+        verification_status="verified",
+    )
+
+    sql_result = SQLResult(
+        columns=["region", "total_revenue"],
+        rows=[
+            ["North", 60000],
+            ["East", 31800],
+            ["West", 33600],
+            ["South", 55600],
+        ],
+        row_count=4,
+    )
+
+    validated = (
+        InsightVerificationWorkflow
+        .validate_against_sql_result(
+            result=result,
+            sql_result=sql_result,
+        )
+    )
+
+    assert validated.verification_status == "verified"
+    assert validated.unsupported_claims == []
+
+
+def test_incorrect_lowest_claim_is_detected():
+    result = InsightAnalysis(
+        insights=[
+            Insight(
+                statement="South has the lowest total revenue.",
+                evidence=[
+                    Evidence(
+                        claim="South has the lowest total revenue.",
+                        supporting_data=(
+                            "South has total revenue of 55600."
+                        ),
+                        is_supported=True,
+                    )
+                ],
+                confidence="high",
+            )
+        ],
+        unsupported_claims=[],
+        verification_status="verified",
+    )
+
+    sql_result = SQLResult(
+        columns=["region", "total_revenue"],
+        rows=[
+            ["North", 60000],
+            ["East", 31800],
+            ["West", 33600],
+            ["South", 55600],
+        ],
+        row_count=4,
+    )
+
+    validated = (
+        InsightVerificationWorkflow
+        .validate_against_sql_result(
+            result=result,
+            sql_result=sql_result,
+        )
+    )
+
+    assert validated.verification_status == "partially_verified"
+
+    assert (
+        "South has the lowest total revenue."
+        in validated.unsupported_claims
+    )
+
+
+def test_non_ranking_insight_is_not_modified():
+    result = InsightAnalysis(
+        insights=[
+            Insight(
+                statement="Revenue varies across regions.",
+                evidence=[
+                    Evidence(
+                        claim="Revenue varies across regions.",
+                        supporting_data=(
+                            "The returned regional revenue "
+                            "values are different."
+                        ),
+                        is_supported=True,
+                    )
+                ],
+                confidence="medium",
+            )
+        ],
+        unsupported_claims=[],
+        verification_status="verified",
+    )
+
+    sql_result = SQLResult(
+        columns=["region", "revenue"],
+        rows=[
+            ["North", 60000],
+            ["East", 31800],
+            ["West", 33600],
+            ["South", 55600],
+        ],
+        row_count=4,
+    )
+
+    validated = (
+        InsightVerificationWorkflow
+        .validate_against_sql_result(
+            result=result,
+            sql_result=sql_result,
+        )
+    )
+
+    assert validated.verification_status == "verified"
+    assert validated.unsupported_claims == []
