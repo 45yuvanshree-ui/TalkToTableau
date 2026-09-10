@@ -936,7 +936,7 @@ Return only the structured SQLGenerationOutput.
 
         agent_1_prompt = f"""
 Convert the following user request into a structured
-analytical plan.
+AnalyticalPlan.
 
 User request:
 {user_request}
@@ -944,36 +944,117 @@ User request:
 Available data schema:
 {data_schema.model_dump_json(indent=2)}
 
-Use only the supplied request and schema.
+Use the Business Analyst instructions as the authoritative
+guidance for interpreting the user's analytical intent.
+
+Use only:
+1. the user's request
+2. the supplied schema
+3. the Business Analyst instructions
+
+The AnalyticalPlan must correctly distinguish:
+
+- analytical objective
+- primary analytical operation
+- base metric definition
+- requested metrics
+- actual grouping dimensions
+- global filters
+- metric-specific conditions
+- numerator and denominator when applicable
+- time range
+- comparison requirements
+- analytical question
+
+IMPORTANT SEMANTIC RULES:
+
+A field used inside a metric calculation is NOT automatically
+a grouping dimension.
+
+A condition used to define a numerator, denominator,
+conditional count, conditional sum, percentage, ratio,
+proportion, share, or similar derived metric is NOT
+automatically a global filter.
+
+Only include a field in dimensions when the user explicitly
+requests a grouping or breakdown by that field.
+
+Only include a condition in filters when it restricts the
+overall population being analyzed.
+
+Metric-specific conditions belong in metric_conditions.
+
+For ratio questions:
+
+"What is the ratio of customers who pay in EUR against
+customers who pay in CZK?"
+
+must be interpreted as:
+
+- analytical objective: ratio
+- operation: ratio
+- numerator: customers whose Currency is EUR
+- denominator: customers whose Currency is CZK
+- metric conditions: Currency = EUR and Currency = CZK
+- dimensions: []
+- filters: []
+
+Currency MUST NOT be added to dimensions unless the user
+explicitly asks for the result broken down by Currency.
+
+"What percentage of customers pay in EUR?"
+
+is a scalar metric request.
+
+Currency = EUR is a metric condition, not a grouping dimension.
+
+"What is the ratio of EUR customers to CZK customers by region?"
+
+has region as a grouping dimension because the user explicitly
+requested the breakdown by region.
+
+Do not infer a grouping dimension merely because a field appears
+inside a condition, CASE expression, conditional aggregation,
+numerator, denominator, or metric definition.
+
+A time range by itself does NOT imply trend analysis.
+
+"What was revenue in 2025?"
+
+is not automatically a trend request.
+
+"How has revenue changed over time?"
+
+is a trend request.
+
+If the user requests a scalar result, do not invent dimensions.
+
+If the user requests a grouped result, preserve every explicitly
+requested grouping dimension.
+
+Preserve the distinction between:
+
+1. grouping dimensions
+2. global filters
+3. metric-specific conditions
+4. numerator/denominator definitions
 
 Do not:
 - generate SQL
+- execute SQL
 - invent columns
+- invent tables
 - invent filters
+- invent dimensions
+- invent metric conditions
 - invent data
 - create insights
 - create visualizations
 - create recommendations
+- silently add assumptions unsupported by the request or schema
 
-Pay special attention to analytical granularity.
-
-If the user asks:
-
-"total revenue by region"
-
-then:
-- dimension = region
-- metric = revenue
-- aggregation = total/sum
-- this is NOT a scalar request
-
-If the user asks:
-
-"what was the total revenue?"
-
-then:
-- no dimension is required
-- this is a scalar request
+If the request is ambiguous, preserve the ambiguity rather than
+inventing an interpretation.
 
 Return only the structured AnalyticalPlan.
 """

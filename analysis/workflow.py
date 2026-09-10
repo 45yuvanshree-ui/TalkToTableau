@@ -48,14 +48,31 @@ class AnalysisWorkflow:
                 metric=plan.metrics[0],
             )
 
-        # Trend analysis can be requested without a grouping dimension.
+        # Trend analysis is performed only when the analytical
+        # intent explicitly represents a trend/time-series request.
+        #
+        # A time range by itself does NOT mean trend analysis.
+        #
+        # Examples:
+        #
+        #   "What was revenue in 2025?"
+        #       -> no trend
+        #
+        #   "What was total revenue by region?"
+        #       -> no trend
+        #
+        #   "How has revenue changed over time?"
+        #       -> trend
+        #
+        #   "Show the revenue trend by month."
+        #       -> trend
         if self._requires_trend(plan) and plan.metrics:
             trend = self._trend(
                 dataframe=dataframe,
                 metric=plan.metrics[0],
             )
 
-        # Anomaly analysis can also be requested without a grouping dimension.
+        # Anomaly analysis is independent of grouping and trend analysis.
         if self._requires_anomaly(plan) and plan.metrics:
             anomaly = self._anomaly(
                 dataframe=dataframe,
@@ -88,6 +105,7 @@ class AnalysisWorkflow:
         - PascalCase: "TotalRevenue" -> "total_revenue"
         - repeated separators
         """
+
         normalized = value.strip()
 
         # Split camelCase / PascalCase boundaries.
@@ -187,16 +205,41 @@ class AnalysisWorkflow:
         cls,
         plan: AnalyticalPlan,
     ) -> bool:
+        """
+        Determine whether deterministic comparison analysis
+        is appropriate for the analytical plan.
+
+        Comparison analysis requires:
+        - at least one dimension
+        - at least one metric
+
+        Explicit comparisons, rankings, and distributions are
+        supported. A generic "by" objective is intentionally
+        supported because grouped analytical plans can benefit
+        from deterministic comparison evidence.
+        """
+
         if not plan.dimensions or not plan.metrics:
             return False
 
-        objective = plan.analytical_objective.lower()
+        objective = (
+            plan.analytical_objective or ""
+        ).lower()
+
+        operation = (
+            getattr(plan, "operation", None)
+            or ""
+        ).lower()
+
+        comparison = (
+            getattr(plan, "comparison", None)
+            or ""
+        ).lower()
 
         comparison_keywords = {
             "comparison",
             "compare",
             "comparison of",
-            "by",
             "ranking",
             "rank",
             "highest",
@@ -206,13 +249,35 @@ class AnalysisWorkflow:
             "distribution",
         }
 
-        return (
-            plan.comparison is not None
-            or any(
-                keyword in objective
-                for keyword in comparison_keywords
-            )
-        )
+        if comparison.strip():
+            return True
+
+        if any(
+            keyword in objective
+            for keyword in comparison_keywords
+        ):
+            return True
+
+        if any(
+            keyword in operation
+            for keyword in comparison_keywords
+        ):
+            return True
+
+        # Grouped analytical results are useful comparison evidence
+        # even when Agent 1 describes the objective primarily as
+        # an aggregation.
+        #
+        # Example:
+        #
+        #   "total revenue by region"
+        #
+        # should produce deterministic region-level comparison
+        # evidence.
+        if "by" in objective:
+            return True
+
+        return False
 
     @classmethod
     def _resolve_metric(
@@ -378,7 +443,9 @@ class AnalysisWorkflow:
                 metric=resolved_metric
             )
 
-        mean = float(valid_values.mean())
+        mean = float(
+            valid_values.mean()
+        )
 
         standard_deviation = float(
             valid_values.std(ddof=0)
@@ -418,21 +485,127 @@ class AnalysisWorkflow:
     def _requires_trend(
         plan: AnalyticalPlan,
     ) -> bool:
-        objective = plan.analytical_objective.lower()
+        """
+        Return True only when the analytical plan explicitly
+        represents a trend or time-series request.
 
-        return (
-            "trend" in objective
-            or "time" in objective
-            or plan.time_range is not None
+        A time_range alone does not imply trend analysis.
+
+        Examples:
+
+            "What was the total revenue by region?"
+            -> False
+
+            "What was revenue in 2025?"
+            -> False
+
+            "How has revenue changed over time?"
+            -> True
+
+            "Show the revenue trend by month."
+            -> True
+
+        This prevents historical filtering and ordinary grouped
+        aggregations from being incorrectly routed into trend
+        analysis.
+        """
+
+        objective = str(
+            getattr(
+                plan,
+                "analytical_objective",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        operation = str(
+            getattr(
+                plan,
+                "operation",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        analytical_question = str(
+            getattr(
+                plan,
+                "analytical_question",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        trend_terms = (
+            "trend",
+            "time series",
+            "timeseries",
+            "over time",
+            "change over time",
+            "changed over time",
+            "growth over time",
+            "historical trend",
+        )
+
+        # Explicit semantic classification from Agent 1.
+        if objective in {
+            "trend",
+            "time series",
+            "timeseries",
+        }:
+            return True
+
+        if operation in {
+            "trend",
+            "time series",
+            "timeseries",
+        }:
+            return True
+
+        # Preserve explicit trend language from the analytical
+        # question without treating every time-related question
+        # as a trend.
+        combined_text = " ".join(
+            [
+                objective,
+                operation,
+                analytical_question,
+            ]
+        )
+
+        return any(
+            term in combined_text
+            for term in trend_terms
         )
 
     @staticmethod
     def _requires_anomaly(
         plan: AnalyticalPlan,
     ) -> bool:
-        objective = plan.analytical_objective.lower()
+        objective = (
+            plan.analytical_objective or ""
+        ).lower()
 
-        return "anomal" in objective
+        operation = (
+            getattr(plan, "operation", None)
+            or ""
+        ).lower()
+
+        analytical_question = (
+            getattr(plan, "analytical_question", None)
+            or ""
+        ).lower()
+
+        combined_text = " ".join(
+            [
+                objective,
+                operation,
+                analytical_question,
+            ]
+        )
+
+        return "anomal" in combined_text
 
     @staticmethod
     def _find_time_column(
