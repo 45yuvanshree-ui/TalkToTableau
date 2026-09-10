@@ -2,6 +2,7 @@ from pathlib import Path
 
 from data_sources.file_source import FileDataSource
 from data_sources.postgres_source import PostgresDataSource
+from data_sources.sqlite_source import SQLiteDataSource
 
 from .models import ColumnSchema, DataSchema, TableSchema
 
@@ -75,4 +76,33 @@ class SchemaRetriever:
         return DataSchema(
             source_type="postgresql",
             tables=table_models,
+        )
+
+    def from_sqlite(
+        self,
+        database_path: str | Path,
+    ) -> DataSchema:
+        """Build a normalized schema from a SQLite database."""
+
+        source = SQLiteDataSource(database_path)
+        raw_schema = source.get_schema()
+
+        tables = [
+            TableSchema(
+                name=table_name,
+                source_type="sqlite",
+                columns=[
+                    ColumnSchema(
+                        name=column_name,
+                        data_type=data_type,
+                    )
+                    for column_name, data_type in columns.items()
+                ],
+            )
+            for table_name, columns in raw_schema.items()
+        ]
+
+        return DataSchema(
+            source_type="sqlite",
+            tables=tables,
         )

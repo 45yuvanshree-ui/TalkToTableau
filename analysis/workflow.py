@@ -1,4 +1,4 @@
-from typing import Any
+import re
 
 import pandas as pd
 
@@ -40,13 +40,7 @@ class AnalysisWorkflow:
         trend = None
         anomaly = None
 
-        if plan.comparison and plan.dimensions and plan.metrics:
-            comparison = self._comparison(
-                dataframe=dataframe,
-                dimension=plan.dimensions[0],
-                metric=plan.metrics[0],
-            )
-
+        # Comparison is only meaningful for grouped results.
         if self._requires_comparison(plan):
             comparison = self._comparison(
                 dataframe=dataframe,
@@ -54,12 +48,14 @@ class AnalysisWorkflow:
                 metric=plan.metrics[0],
             )
 
+        # Trend analysis can be requested without a grouping dimension.
         if self._requires_trend(plan) and plan.metrics:
             trend = self._trend(
                 dataframe=dataframe,
                 metric=plan.metrics[0],
             )
 
+        # Anomaly analysis can also be requested without a grouping dimension.
         if self._requires_anomaly(plan) and plan.metrics:
             anomaly = self._anomaly(
                 dataframe=dataframe,
@@ -74,11 +70,7 @@ class AnalysisWorkflow:
         )
 
     @staticmethod
-    def _to_dataframe(
-        sql_result: SQLResult,
-    ) -> pd.DataFrame:
-        """Convert SQLResult into a DataFrame."""
-
+    def _to_dataframe(sql_result: SQLResult) -> pd.DataFrame:
         return pd.DataFrame(
             sql_result.rows,
             columns=sql_result.columns,
@@ -87,18 +79,32 @@ class AnalysisWorkflow:
     @staticmethod
     def _normalize_name(value: str) -> str:
         """
-        Normalize a field name for deterministic matching.
+        Normalize natural-language names and SQL column names.
 
-        Examples:
-
-        total revenue -> total_revenue
-        Total Revenue -> total_revenue
-        total-revenue -> total_revenue
+        Handles:
+        - spaces: "total revenue" -> "total_revenue"
+        - hyphens: "total-revenue" -> "total_revenue"
+        - camelCase: "totalRevenue" -> "total_revenue"
+        - PascalCase: "TotalRevenue" -> "total_revenue"
+        - repeated separators
         """
+        normalized = value.strip()
 
-        import re
+        # Split camelCase / PascalCase boundaries.
+        normalized = re.sub(
+            r"([a-z0-9])([A-Z])",
+            r"\1_\2",
+            normalized,
+        )
 
-        normalized = value.strip().lower()
+        # Split acronym-to-word boundaries such as SQLQuery.
+        normalized = re.sub(
+            r"([A-Z]+)([A-Z][a-z])",
+            r"\1_\2",
+            normalized,
+        )
+
+        normalized = normalized.lower()
 
         normalized = re.sub(
             r"[^a-z0-9]+",
@@ -120,19 +126,11 @@ class AnalysisWorkflow:
         requested_name: str,
         dataframe: pd.DataFrame,
     ) -> str | None:
-        """
-        Resolve a requested analytical field to an actual
-        SQL result column.
-        """
-
         requested_normalized = cls._normalize_name(
             requested_name
         )
 
-        # --------------------------------------------------
-        # 1. Exact normalized match
-        # --------------------------------------------------
-
+        # First try an exact normalized match.
         for column in dataframe.columns:
             if (
                 cls._normalize_name(str(column))
@@ -140,10 +138,7 @@ class AnalysisWorkflow:
             ):
                 return str(column)
 
-        # --------------------------------------------------
-        # 2. Aggregation-aware matching
-        # --------------------------------------------------
-
+        # Then allow aggregation words to differ.
         aggregation_words = {
             "total",
             "sum",
@@ -192,18 +187,6 @@ class AnalysisWorkflow:
         cls,
         plan: AnalyticalPlan,
     ) -> bool:
-        """
-        Determine whether the analytical plan represents a
-        categorical comparison.
-
-        A request such as:
-
-        "total revenue by region"
-
-        is a comparison even if the LLM does not explicitly
-        populate the comparison field.
-        """
-
         if not plan.dimensions or not plan.metrics:
             return False
 
@@ -237,14 +220,9 @@ class AnalysisWorkflow:
         dataframe: pd.DataFrame,
         metric: str,
     ) -> str:
-        """
-        Resolve the metric requested by Agent 1 to an actual
-        SQL result column.
-        """
-
         resolved = cls._find_matching_column(
-            requested_name=metric,
-            dataframe=dataframe,
+            metric,
+            dataframe,
         )
 
         if resolved is not None:
@@ -260,14 +238,9 @@ class AnalysisWorkflow:
         dataframe: pd.DataFrame,
         dimension: str,
     ) -> str:
-        """
-        Resolve the requested dimension to an actual SQL
-        result column.
-        """
-
         resolved = cls._find_matching_column(
-            requested_name=dimension,
-            dataframe=dataframe,
+            dimension,
+            dataframe,
         )
 
         if resolved is not None:
@@ -284,16 +257,14 @@ class AnalysisWorkflow:
         dimension: str,
         metric: str,
     ) -> ComparisonAnalysis:
-        """Aggregate a metric by a requested dimension."""
-
         resolved_dimension = cls._resolve_dimension(
-            dataframe=dataframe,
-            dimension=dimension,
+            dataframe,
+            dimension,
         )
 
         resolved_metric = cls._resolve_metric(
-            dataframe=dataframe,
-            metric=metric,
+            dataframe,
+            metric,
         )
 
         numeric_metric = pd.to_numeric(
@@ -302,7 +273,6 @@ class AnalysisWorkflow:
         )
 
         working = dataframe.copy()
-
         working["_analysis_metric"] = numeric_metric
 
         grouped = (
@@ -330,13 +300,9 @@ class AnalysisWorkflow:
         dataframe: pd.DataFrame,
         metric: str,
     ) -> TrendAnalysis:
-        """
-        Analyze a metric across the first suitable time-like column.
-        """
-
         resolved_metric = cls._resolve_metric(
-            dataframe=dataframe,
-            metric=metric,
+            dataframe,
+            metric,
         )
 
         time_column = cls._find_time_column(
@@ -395,11 +361,9 @@ class AnalysisWorkflow:
         dataframe: pd.DataFrame,
         metric: str,
     ) -> AnomalyAnalysis:
-        """Detect statistical outliers using a three-standard-deviation rule."""
-
         resolved_metric = cls._resolve_metric(
-            dataframe=dataframe,
-            metric=metric,
+            dataframe,
+            metric,
         )
 
         numeric_values = pd.to_numeric(
@@ -417,22 +381,14 @@ class AnalysisWorkflow:
         mean = float(valid_values.mean())
 
         standard_deviation = float(
-            valid_values.std(
-                ddof=0
-            )
+            valid_values.std(ddof=0)
         )
 
         if standard_deviation == 0:
-            anomalous_rows: list[
-                dict[str, object]
-            ] = []
-
+            anomalous_rows = []
         else:
             mask = (
-                (
-                    numeric_values
-                    - mean
-                ).abs()
+                (numeric_values - mean).abs()
                 > 3 * standard_deviation
             )
 
@@ -441,8 +397,7 @@ class AnalysisWorkflow:
             ]
 
             anomalous_rows = (
-                selected_rows
-                .astype(object)
+                selected_rows.astype(object)
                 .where(
                     selected_rows.notna(),
                     None,
@@ -463,12 +418,7 @@ class AnalysisWorkflow:
     def _requires_trend(
         plan: AnalyticalPlan,
     ) -> bool:
-        """Determine whether trend analysis was requested."""
-
-        objective = (
-            plan.analytical_objective
-            .lower()
-        )
+        objective = plan.analytical_objective.lower()
 
         return (
             "trend" in objective
@@ -480,12 +430,7 @@ class AnalysisWorkflow:
     def _requires_anomaly(
         plan: AnalyticalPlan,
     ) -> bool:
-        """Determine whether anomaly analysis was requested."""
-
-        objective = (
-            plan.analytical_objective
-            .lower()
-        )
+        objective = plan.analytical_objective.lower()
 
         return "anomal" in objective
 
@@ -493,8 +438,6 @@ class AnalysisWorkflow:
     def _find_time_column(
         dataframe: pd.DataFrame,
     ) -> str | None:
-        """Find the first column that can reasonably represent time."""
-
         preferred_names = [
             "date",
             "sale_date",
@@ -520,10 +463,7 @@ class AnalysisWorkflow:
                 errors="coerce",
             )
 
-            if (
-                converted.notna().mean()
-                >= 0.8
-            ):
+            if converted.notna().mean() >= 0.8:
                 return str(column)
 
         return None

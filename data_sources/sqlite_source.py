@@ -10,11 +10,17 @@ from .base import DataSource
 class SQLiteDataSource(DataSource):
     """Read-only SQLite data source for database-backed workflows."""
 
-    def __init__(self, database_path: str | Path):
-        self.database_path = Path(database_path)
+    def __init__(
+        self,
+        database_path: str | Path,
+    ):
+        self.database_path = Path(
+            database_path
+        )
 
     def test_connection(self) -> bool:
         """Return True when the SQLite database is accessible."""
+
         return (
             self.database_path.exists()
             and self.database_path.is_file()
@@ -22,9 +28,11 @@ class SQLiteDataSource(DataSource):
 
     def get_schema(self) -> dict[str, Any]:
         """Return SQLite table and column metadata."""
+
         if not self.test_connection():
             raise ValueError(
-                f"SQLite database not found: {self.database_path}"
+                f"SQLite database not found: "
+                f"{self.database_path}"
             )
 
         connection = sqlite3.connect(
@@ -46,6 +54,7 @@ class SQLiteDataSource(DataSource):
             schema: dict[str, Any] = {}
 
             for (table_name,) in tables:
+
                 columns = connection.execute(
                     f'PRAGMA table_info("{table_name}")'
                 ).fetchall()
@@ -60,21 +69,37 @@ class SQLiteDataSource(DataSource):
         finally:
             connection.close()
 
-    def execute(self, query: str) -> pd.DataFrame:
-        """Execute a read-only SQL query against the SQLite database."""
+    def execute(
+        self,
+        query: str,
+    ) -> pd.DataFrame:
+        """
+        Execute a read-only SQL query against SQLite.
+
+        Database execution failures are converted into ValueError
+        so the orchestration workflow can perform its bounded SQL
+        repair/retry process.
+        """
+
         if not self.test_connection():
             raise ValueError(
-                f"SQLite database not found: {self.database_path}"
+                f"SQLite database not found: "
+                f"{self.database_path}"
             )
 
         normalized_query = query.strip()
 
         if not normalized_query:
-            raise ValueError("SQL query is empty.")
-
-        if not normalized_query.lower().startswith("select"):
             raise ValueError(
-                "SQLiteDataSource only permits SELECT queries."
+                "SQL query is empty."
+            )
+
+        if not normalized_query.lower().startswith(
+            "select"
+        ):
+            raise ValueError(
+                "SQLiteDataSource only permits "
+                "SELECT queries."
             )
 
         connection = sqlite3.connect(
@@ -83,9 +108,21 @@ class SQLiteDataSource(DataSource):
         )
 
         try:
-            return pd.read_sql_query(
-                normalized_query,
-                connection,
-            )
+            try:
+                return pd.read_sql_query(
+                    normalized_query,
+                    connection,
+                )
+
+            except (
+                sqlite3.Error,
+                pd.errors.DatabaseError,
+            ) as error:
+
+                raise ValueError(
+                    "SQLite SQL execution failed: "
+                    f"{error}"
+                ) from error
+
         finally:
             connection.close()

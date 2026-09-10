@@ -5,23 +5,20 @@ import pandas as pd
 
 from data_sources.file_source import FileDataSource
 from data_sources.postgres_source import PostgresDataSource
+from data_sources.sqlite_source import SQLiteDataSource
 
 from .models import SQLResult
 from .validator import validate_sql
 
 
 class SQLExecutor:
-    """
-    Execute validated read-only SQL against supported data sources.
-    """
+    """Execute validated read-only SQL against supported data sources."""
 
     def execute_file(
         self,
         file_path: str | Path,
         query: str,
     ) -> SQLResult:
-        """Execute SQL against a CSV or Excel file using DuckDB."""
-
         validation = validate_sql(query)
 
         if not validation.is_valid:
@@ -32,11 +29,15 @@ class SQLExecutor:
         connection = duckdb.connect()
 
         try:
-            connection.register("data", dataframe)
+            connection.register(
+                "data",
+                dataframe,
+            )
 
             result = connection.execute(
                 validation.normalized_query
             ).fetchdf()
+
         finally:
             connection.close()
 
@@ -47,8 +48,6 @@ class SQLExecutor:
         connection_string: str,
         query: str,
     ) -> SQLResult:
-        """Execute validated SQL against PostgreSQL."""
-
         validation = validate_sql(query)
 
         if not validation.is_valid:
@@ -56,7 +55,29 @@ class SQLExecutor:
 
         dataframe = PostgresDataSource(
             connection_string
-        ).execute(validation.normalized_query)
+        ).execute(
+            validation.normalized_query
+        )
+
+        return self._to_result(dataframe)
+
+    def execute_sqlite(
+        self,
+        database_path: str | Path,
+        query: str,
+    ) -> SQLResult:
+        """Execute validated read-only SQL against SQLite."""
+
+        validation = validate_sql(query)
+
+        if not validation.is_valid:
+            raise ValueError(validation.reason)
+
+        dataframe = SQLiteDataSource(
+            database_path
+        ).execute(
+            validation.normalized_query
+        )
 
         return self._to_result(dataframe)
 
@@ -64,16 +85,20 @@ class SQLExecutor:
     def _to_result(
         dataframe: pd.DataFrame,
     ) -> SQLResult:
-        """Convert a DataFrame into a structured SQL result."""
-
         return SQLResult(
             columns=[
                 str(column)
                 for column in dataframe.columns
             ],
-            rows=dataframe.astype(object).where(
-                dataframe.notna(),
-                None,
-            ).values.tolist(),
+            rows=(
+                dataframe
+                .astype(object)
+                .where(
+                    dataframe.notna(),
+                    None,
+                )
+                .values
+                .tolist()
+            ),
             row_count=len(dataframe),
         )
