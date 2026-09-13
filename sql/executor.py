@@ -1,11 +1,13 @@
 from pathlib import Path
 
-import duckdb
 import pandas as pd
 
-from data_sources.file_source import FileDataSource
-from data_sources.postgres_source import PostgresDataSource
-from data_sources.sqlite_source import SQLiteDataSource
+from data_sources import (
+    DataSource,
+    FileDataSource,
+    PostgresDataSource,
+    SQLiteDataSource,
+)
 
 from .models import SQLResult
 from .validator import validate_sql
@@ -14,72 +16,79 @@ from .validator import validate_sql
 class SQLExecutor:
     """Execute validated read-only SQL against supported data sources."""
 
+    def execute_source(
+        self,
+        source: DataSource,
+        query: str,
+    ) -> SQLResult:
+        """
+        Execute SQL through the common DataSource interface.
+        """
+
+        validation = validate_sql(
+            query
+        )
+
+        if not validation.is_valid:
+            raise ValueError(
+                validation.reason
+            )
+
+        dataframe = source.execute(
+            validation.normalized_query
+        )
+
+        return self._to_result(
+            dataframe
+        )
+
     def execute_file(
         self,
         file_path: str | Path,
         query: str,
     ) -> SQLResult:
-        validation = validate_sql(query)
+        """Execute SQL against a CSV/Excel source."""
 
-        if not validation.is_valid:
-            raise ValueError(validation.reason)
+        source = FileDataSource(
+            file_path
+        )
 
-        dataframe = FileDataSource(file_path).load()
-
-        connection = duckdb.connect()
-
-        try:
-            connection.register(
-                "data",
-                dataframe,
-            )
-
-            result = connection.execute(
-                validation.normalized_query
-            ).fetchdf()
-
-        finally:
-            connection.close()
-
-        return self._to_result(result)
+        return self.execute_source(
+            source=source,
+            query=query,
+        )
 
     def execute_postgres(
         self,
         connection_string: str,
         query: str,
     ) -> SQLResult:
-        validation = validate_sql(query)
+        """Execute SQL against PostgreSQL."""
 
-        if not validation.is_valid:
-            raise ValueError(validation.reason)
-
-        dataframe = PostgresDataSource(
+        source = PostgresDataSource(
             connection_string
-        ).execute(
-            validation.normalized_query
         )
 
-        return self._to_result(dataframe)
+        return self.execute_source(
+            source=source,
+            query=query,
+        )
 
     def execute_sqlite(
         self,
         database_path: str | Path,
         query: str,
     ) -> SQLResult:
-        """Execute validated read-only SQL against SQLite."""
+        """Execute SQL against SQLite."""
 
-        validation = validate_sql(query)
-
-        if not validation.is_valid:
-            raise ValueError(validation.reason)
-
-        dataframe = SQLiteDataSource(
+        source = SQLiteDataSource(
             database_path
-        ).execute(
-            validation.normalized_query
         )
 
-        return self._to_result(dataframe)
+        return self.execute_source(
+            source=source,
+            query=query,
+        )
 
     @staticmethod
     def _to_result(
@@ -88,7 +97,8 @@ class SQLExecutor:
         return SQLResult(
             columns=[
                 str(column)
-                for column in dataframe.columns
+                for column
+                in dataframe.columns
             ],
             rows=(
                 dataframe
