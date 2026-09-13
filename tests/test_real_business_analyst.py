@@ -1,4 +1,4 @@
-import os
+import pytest
 
 from agents import Runner
 
@@ -10,14 +10,12 @@ from routing import (
 )
 
 
-def test_real_business_analyst_with_ollama():
+@pytest.mark.live_llm
+def test_real_business_analyst_with_configured_provider():
     """
-    Verify that the real Business Analyst agent can use
-    the local Ollama model through the Agents SDK.
+    Verify that the real Business Analyst agent can use the
+    provider configured through the environment.
     """
-
-    os.environ["LLM_PROVIDER"] = "local"
-    os.environ["OLLAMA_FAST_MODEL"] = "llama3.2:3b"
 
     provider_config = LLMProviderConfig()
 

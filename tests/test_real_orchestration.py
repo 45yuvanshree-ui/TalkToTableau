@@ -1,14 +1,16 @@
-import os
+import pytest
+
 from pathlib import Path
 
 from orchestration.workflow import TalkToTableauWorkflow
 
 
-def test_real_orchestration_with_ollama():
-    """Test the complete real orchestration with Ollama."""
-
-    os.environ["LLM_PROVIDER"] = "local"
-    os.environ["OLLAMA_FAST_MODEL"] = "llama3.2:3b"
+@pytest.mark.live_llm
+def test_real_orchestration_with_configured_provider():
+    """
+    Verify the complete real orchestration using the provider
+    configured through the environment.
+    """
 
     data_file = Path("database/golden_sales.csv")
 
