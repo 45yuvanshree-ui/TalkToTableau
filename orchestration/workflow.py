@@ -15,6 +15,7 @@ from agent_components import (
 )
 from analysis import AnalysisWorkflow
 from context import SessionContext
+from data_sources import DataSource, create_data_source
 from guardrails import (
     validate_input,
     validate_insight_output,
@@ -50,11 +51,25 @@ SQLITE_EXTENSIONS = {
 class TalkToTableauWorkflow:
     def __init__(
         self,
-        data_file: str | Path,
+        data_file: str | Path | None = None,
         model_factory: AgentsModelFactory | None = None,
         router: AdaptiveRouter | None = None,
+        data_source: DataSource | None = None,
     ):
-        self.data_file = Path(data_file)
+        if data_source is None and data_file is None:
+            raise ValueError("Either data_file or data_source must be provided.")
+
+        self.data_file = (
+            Path(data_file)
+            if data_file is not None
+            else None
+        )
+
+        self.data_source = (
+            data_source
+            if data_source is not None
+            else create_data_source(self.data_file)
+        )
 
         self.model_factory = (
             model_factory
@@ -81,40 +96,36 @@ class TalkToTableauWorkflow:
     # ==============================================================
 
     def _is_sqlite_source(self) -> bool:
-        """Return True when the configured source is a SQLite database."""
+        """Return True when the configured source is SQLite."""
 
-        return (
-            self.data_file.suffix.lower()
-            in SQLITE_EXTENSIONS
-        )
+        return self.data_source.__class__.__name__ == "SQLiteDataSource"
 
     def _retrieve_schema(self):
-        """Retrieve the schema using the appropriate source adapter."""
+        """
+        Retrieve the schema through the DataSource abstraction.
 
-        if self._is_sqlite_source():
-            return self.schema_retriever.from_sqlite(
-                database_path=self.data_file
+        FileDataSource uses the conventional DuckDB table name ``data``.
+        Other DataSource implementations use their native schema metadata.
+        """
+
+        if self.data_source.__class__.__name__ == "FileDataSource":
+            return self.schema_retriever.from_source(
+                source=self.data_source,
+                table_name="data",
             )
 
-        return self.schema_retriever.from_file(
-            file_path=self.data_file,
-            table_name="data",
+        return self.schema_retriever.from_source(
+            source=self.data_source,
         )
 
     def _execute_sql(
         self,
         query: str,
     ):
-        """Execute validated SQL using the configured source."""
+        """Execute SQL through SQLExecutor and the configured DataSource."""
 
-        if self._is_sqlite_source():
-            return self.sql_executor.execute_sqlite(
-                database_path=self.data_file,
-                query=query,
-            )
-
-        return self.sql_executor.execute_file(
-            file_path=self.data_file,
+        return self.sql_executor.execute_source(
+            source=self.data_source,
             query=query,
         )
 
@@ -289,32 +300,70 @@ class TalkToTableauWorkflow:
         """
         Validate that the executed SQL result contains the
         analytical outputs required by the Business Analyst plan.
+
+        Semantic distinction:
+        - output_fields -> fields explicitly requested for direct retrieval
+        - dimensions -> fields explicitly requested for grouping/breakdown
+        - metrics -> calculated measures
         """
 
+        missing_output_fields: list[str] = []
         missing_dimensions: list[str] = []
         missing_metrics: list[str] = []
 
-        is_scalar_request = not bool(
-            getattr(
-                plan,
-                "dimensions",
-                None,
+        output_fields = getattr(
+            plan,
+            "output_fields",
+            None,
+        ) or []
+
+        dimensions = getattr(
+            plan,
+            "dimensions",
+            None,
+        ) or []
+
+        metrics = getattr(
+            plan,
+            "metrics",
+            None,
+        ) or []
+
+        if not result_columns:
+            return (
+                False,
+                "SQL result validation failed: "
+                "the SQL query produced no result columns.",
             )
-        )
 
-        if is_scalar_request:
+        # ----------------------------------------------------------
+        # DIRECT RETRIEVAL OUTPUT FIELDS
+        # ----------------------------------------------------------
+        #
+        # Direct list/retrieval requests are represented by
+        # output_fields. These fields must actually appear in
+        # the SQL result.
+        #
+        for output_field in output_fields:
 
-            if not result_columns:
-                return (
-                    False,
-                    "SQL result validation failed: "
-                    "the scalar analytical request produced "
-                    "no result columns.",
+            if (
+                cls._find_result_column(
+                    requested_name=output_field,
+                    result_columns=result_columns,
+                )
+                is None
+            ):
+                missing_output_fields.append(
+                    output_field
                 )
 
-            return True, None
-
-        for dimension in plan.dimensions:
+        # ----------------------------------------------------------
+        # GROUPING DIMENSIONS
+        # ----------------------------------------------------------
+        #
+        # dimensions represent actual grouping/breakdown fields.
+        #
+        for dimension in dimensions:
 
             if (
                 cls._find_result_column(
@@ -327,22 +376,45 @@ class TalkToTableauWorkflow:
                     dimension
                 )
 
-        for metric in plan.metrics:
+        # ----------------------------------------------------------
+        # GROUPED METRICS
+        # ----------------------------------------------------------
+        #
+        # For grouped analytical requests, requested metrics must
+        # appear in the result.
+        #
+        # Scalar/derived metrics may legitimately have a final
+        # derived alias such as "ratio", so they are not required
+        # to match the internal metric description verbatim.
+        #
+        if dimensions:
 
-            if (
-                cls._find_result_column(
-                    requested_name=metric,
-                    result_columns=result_columns,
-                )
-                is None
-            ):
-                missing_metrics.append(
-                    metric
-                )
+            for metric in metrics:
 
-        if missing_dimensions or missing_metrics:
+                if (
+                    cls._find_result_column(
+                        requested_name=metric,
+                        result_columns=result_columns,
+                    )
+                    is None
+                ):
+                    missing_metrics.append(
+                        metric
+                    )
+
+        if (
+            missing_output_fields
+            or missing_dimensions
+            or missing_metrics
+        ):
 
             problems: list[str] = []
+
+            if missing_output_fields:
+                problems.append(
+                    "Missing required output fields "
+                    f"in SQL result: {missing_output_fields}."
+                )
 
             if missing_dimensions:
                 problems.append(
@@ -374,6 +446,11 @@ class TalkToTableauWorkflow:
     ) -> tuple[bool, str | None]:
         """
         Perform deterministic structural checks before SQL execution.
+
+        Semantic distinction:
+        - output_fields -> direct retrieval
+        - dimensions -> grouping
+        - metrics -> calculations
         """
 
         normalized = query.strip()
@@ -412,6 +489,18 @@ class TalkToTableauWorkflow:
             None,
         ) or []
 
+        # ONLY actual grouping dimensions require GROUP BY.
+        #
+        # output_fields do NOT require GROUP BY.
+        #
+        # Therefore:
+        #
+        # output_fields = ["School Code"]
+        # dimensions = []
+        #
+        # is a direct retrieval query and must not be forced
+        # into GROUP BY semantics.
+        #
         if dimensions:
 
             if not re.search(
@@ -444,6 +533,12 @@ class TalkToTableauWorkflow:
         Build precise feedback for a bounded SQL regeneration attempt.
         """
 
+        output_fields = getattr(
+            plan,
+            "output_fields",
+            None,
+        ) or []
+
         dimensions = getattr(
             plan,
             "dimensions",
@@ -462,14 +557,83 @@ class TalkToTableauWorkflow:
             None,
         ) or []
 
-        grouped = bool(dimensions)
+        # ----------------------------------------------------------
+        # DIRECT RETRIEVAL
+        # ----------------------------------------------------------
 
-        if grouped:
+        if output_fields:
+
+            retrieval_instruction = f"""
+The analytical plan requests DIRECT RETRIEVAL of specific fields.
+
+Requested output fields:
+{output_fields}
+
+The SQL MUST:
+- SELECT every requested output field.
+- Return the requested fields exactly.
+- Apply only the filters explicitly present in the analytical plan.
+- NOT replace a requested output field with a related field.
+- NOT invent additional output fields.
+- NOT invent metrics.
+- NOT add unrelated joins.
+- NOT add unrelated filters.
+- NOT add GROUP BY unless dimensions are also explicitly requested.
+
+IMPORTANT:
+
+output_fields are NOT grouping dimensions.
+
+For example:
+
+User request:
+"List the school codes of schools with total enrollment over 500."
+
+Analytical plan:
+
+output_fields:
+["School Code"]
+
+dimensions:
+[]
+
+filters:
+["Enrollment (K-12) > 500"]
+
+The SQL should have the equivalent semantic structure:
+
+SELECT "School Code"
+FROM <table containing the requested fields>
+WHERE "Enrollment (K-12)" > 500
+
+Use the actual table and exact column identifiers from the supplied schema.
+
+Do NOT:
+- SELECT Enrollment instead of School Code
+- GROUP BY School Code
+- GROUP BY Age
+- add County filters
+- add School Type filters
+- add certification-status filters
+- add unrelated joins
+"""
+
+        else:
+
+            retrieval_instruction = """
+The analytical plan does not request direct retrieval output fields.
+"""
+
+        # ----------------------------------------------------------
+        # GROUPED ANALYTICS
+        # ----------------------------------------------------------
+
+        if dimensions:
 
             granularity_instruction = f"""
-The analytical plan requests grouped results.
+The analytical plan requests GROUPED results.
 
-Requested dimensions:
+Requested grouping dimensions:
 {dimensions}
 
 Requested metrics:
@@ -482,11 +646,11 @@ Therefore the SQL MUST:
 - include GROUP BY for the requested dimension(s)
 - return one row per requested dimension value
 
-For example, for:
+Example:
 
-total revenue by region
+"total revenue by region"
 
-the expected structure is:
+Expected semantic structure:
 
 SELECT
     region,
@@ -494,36 +658,48 @@ SELECT
 FROM data
 GROUP BY region
 
-Do NOT select raw revenue alongside the grouped result unless it is
-itself correctly aggregated.
+Do NOT select raw unaggregated metric values alongside the grouped
+result unless that field is itself correctly aggregated.
 """
 
         else:
 
             granularity_instruction = f"""
-The analytical plan does not request dimensions.
+The analytical plan does NOT request grouping dimensions.
 
 Requested metrics:
 {metrics}
 
-Generate one overall scalar result at the requested aggregation level.
-Do not add GROUP BY unless explicitly required by the analytical plan.
+If this is a scalar analytical request, return the requested scalar
+calculation directly.
+
+If this is a direct retrieval request, return the requested
+output_fields directly.
+
+Do NOT add GROUP BY unless dimensions are explicitly present in
+the analytical plan.
 """
+
+        # ----------------------------------------------------------
+        # FILTERS
+        # ----------------------------------------------------------
 
         if filters:
 
             filter_instruction = f"""
-The analytical plan explicitly contains these filters:
+The analytical plan explicitly contains these global filters:
 
 {filters}
 
-Apply only those filters.
+Apply ONLY these filters.
+
+Do not invent additional WHERE conditions.
 """
 
         else:
 
             filter_instruction = """
-The analytical plan contains NO filters.
+The analytical plan contains NO global filters.
 
 Therefore:
 - DO NOT add WHERE.
@@ -531,7 +707,12 @@ Therefore:
 - DO NOT add arbitrary region filters.
 - DO NOT add arbitrary country filters.
 - DO NOT add arbitrary segment filters.
+- DO NOT add certification-status filters.
 """
+
+        # ----------------------------------------------------------
+        # SOURCE
+        # ----------------------------------------------------------
 
         source_instruction = ""
 
@@ -548,8 +729,7 @@ Therefore the SQL must contain:
 
 FROM data
 
-Do not omit the FROM clause.
-Do not use the original CSV filename as a table name.
+Do not use the original filename as a table name.
 """
 
         elif schema.source_type == "sqlite":
@@ -558,8 +738,14 @@ Do not use the original CSV filename as a table name.
 The data source is SQLite.
 
 Use the exact SQLite table names from the supplied schema.
-Do not use data.<table>.
+
+Do not use:
+
+data.<table>
+
 Do not invent a data schema.
+
+Use exact schema column names.
 """
 
         return f"""
@@ -576,6 +762,8 @@ REGENERATE THE SQL COMPLETELY
 ==================================================
 
 The analytical plan is authoritative.
+
+{retrieval_instruction}
 
 {granularity_instruction}
 
@@ -595,46 +783,45 @@ The query MUST contain:
 2. FROM
 3. valid table references
 4. valid columns
-5. correct aggregation
-6. correct grouping when dimensions are requested
+5. correct analytical operation
+6. GROUP BY only when dimensions are requested
 
 Never return a partial SQL fragment.
 
-Never return:
-
-SELECT region, revenue, COUNT(*)
-
-without FROM.
-
-Never omit FROM.
-
-Never omit GROUP BY for a grouped analytical request.
-
-Never invent columns.
-
-Never invent tables.
-
-Never invent filters.
+Never invent:
+- tables
+- columns
+- filters
+- dimensions
+- metrics
+- joins
 
 Never add unrelated conditions.
+
+For direct retrieval requests:
+- requested fields belong in SELECT
+- requested conditions belong in WHERE
+- output_fields do NOT imply GROUP BY
+
+For grouped requests:
+- dimensions belong in SELECT
+- metrics must be aggregated
+- dimensions require GROUP BY
+
+For scalar requests:
+- return the scalar analytical result
+- do not introduce arbitrary grouping
 
 For file-based data:
 
 FROM data
 
-For a request such as:
-
-"What was the total revenue by region?"
-
-generate the equivalent of:
-
-SELECT
-    region,
-    SUM(revenue) AS total_revenue
-FROM data
-GROUP BY region
-
-The exact alias may differ, but the analytical meaning must be identical.
+For SQLite:
+- use SQLite-compatible SQL
+- use exact table names
+- use exact column names
+- use IIF(...) instead of IF(...)
+- do not use data.<table>
 
 Return only the structured SQLGenerationOutput.
 """
@@ -813,8 +1000,10 @@ Return only the structured SQLGenerationOutput.
         )
 
         context.user_request = user_request
-        context.data_source = str(
-            self.data_file
+        context.data_source = (
+            str(self.data_file)
+            if self.data_file is not None
+            else self.data_source.__class__.__name__
         )
 
         # ==========================================================
@@ -865,8 +1054,10 @@ Return only the structured SQLGenerationOutput.
             event_type=TraceEventType.SCHEMA,
             message="Retrieving data schema.",
             metadata={
-                "source": str(
-                    self.data_file
+                "source": (
+                    str(self.data_file)
+                    if self.data_file is not None
+                    else self.data_source.__class__.__name__
                 ),
             },
         )
@@ -957,6 +1148,7 @@ The AnalyticalPlan must correctly distinguish:
 - analytical objective
 - primary analytical operation
 - base metric definition
+- requested output fields
 - requested metrics
 - actual grouping dimensions
 - global filters
@@ -965,6 +1157,35 @@ The AnalyticalPlan must correctly distinguish:
 - time range
 - comparison requirements
 - analytical question
+
+IMPORTANT:
+For direct retrieval or list requests, populate
+`output_fields` with the exact schema fields that the user
+explicitly asks to see.
+
+For example:
+
+User request:
+"Please list the codes of the schools with a total enrollment
+of over 500."
+
+Correct interpretation:
+
+- analytical_objective: retrieval
+- operation: retrieve
+- output_fields: ["School Code"]
+- metrics: []
+- dimensions: []
+- filters: ["Enrollment (K-12) + Enrollment (Ages 5-17) > 500"]
+- metric_conditions: []
+
+Do NOT treat the requested output field as a grouping dimension.
+
+Do NOT replace the requested output field with a field used only
+to evaluate the filter.
+
+Do NOT invent additional filters, dimensions, metrics, joins,
+or output fields.
 
 IMPORTANT SEMANTIC RULES:
 
