@@ -98,7 +98,19 @@ def _extract_story_numbers(text: str) -> list[float]:
 def _numeric_values_from_sql(
     sql_result: SQLResult,
 ) -> list[float]:
-    """Return all numeric values present in SQL result rows."""
+    """
+    Return all authoritative numeric values associated with
+    the SQL result.
+
+    Numeric values may come from:
+    1. Numeric values contained in SQL result rows.
+    2. The SQL result row_count metadata.
+
+    row_count is included because it is an authoritative property
+    of the executed result set and may legitimately be referenced
+    by a business story, especially for retrieval/list queries
+    whose returned values are identifiers represented as strings.
+    """
 
     values: list[float] = []
 
@@ -109,6 +121,11 @@ def _numeric_values_from_sql(
 
             if isinstance(value, (int, float)):
                 values.append(float(value))
+
+    if sql_result.row_count is not None:
+        values.append(
+            float(sql_result.row_count)
+        )
 
     return values
 

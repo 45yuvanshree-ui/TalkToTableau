@@ -23,7 +23,7 @@ def test_real_business_analyst_with_configured_provider():
         provider_config=provider_config
     )
 
-    model = factory.create_model(
+    model = factory.create_model_for_tier(
         ModelTier.FAST
     )
 

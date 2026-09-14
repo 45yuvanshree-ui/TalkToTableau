@@ -5,8 +5,6 @@ from uuid import uuid4
 
 import re
 
-from agents import Runner
-
 from agent_components import (
     InsightVerificationWorkflow,
     create_business_analyst,
@@ -27,6 +25,8 @@ from models import BusinessStory, InsightAnalysis
 from routing import (
     AdaptiveRouter,
     AgentsModelFactory,
+    AgentsSDKExecutor,
+    ModelTier,
     RoutingRequest,
 )
 from schema import SchemaRetriever
@@ -46,6 +46,11 @@ SQLITE_EXTENSIONS = {
     ".sqlite3",
     ".db",
 }
+
+
+def _normalize_generated_sql(query: str) -> str:
+    """Normalize common LLM identifier quoting for local SQL engines."""
+    return query.replace("`", '"')
 
 
 class TalkToTableauWorkflow:
@@ -104,13 +109,14 @@ class TalkToTableauWorkflow:
         """
         Retrieve the schema through the DataSource abstraction.
 
-        FileDataSource uses the conventional DuckDB table name ``data``.
-        Other DataSource implementations use their native schema metadata.
+        FileDataSource uses the conventional logical table name
+        ``data``. Other DataSource implementations use their native
+        schema metadata.
         """
 
         if self.data_source.__class__.__name__ == "FileDataSource":
-            return self.schema_retriever.from_source(
-                source=self.data_source,
+            return self.schema_retriever.from_file(
+                self.data_file,
                 table_name="data",
             )
 
@@ -1085,15 +1091,16 @@ Return only the structured SQLGenerationOutput.
         # AGENT 1 — BUSINESS ANALYST
         # ==========================================================
 
+        
         (
             business_analyst_model,
             business_analysis_routing,
         ) = self._route_model(
             user_request=user_request,
-            sql_complexity=2,
-            ambiguity=2,
-            reasoning_required=True,
-            output_complexity=2,
+            sql_complexity=1,
+            ambiguity=1,
+            reasoning_required=False,
+            output_complexity=1,
             schema_size=max(
                 schema_size,
                 1,
@@ -1111,10 +1118,6 @@ Return only the structured SQLGenerationOutput.
                 "complexity_score":
                     business_analysis_routing.complexity_score,
             },
-        )
-
-        business_analyst = create_business_analyst(
-            model=business_analyst_model
         )
 
         tracer.add_event(
@@ -1280,13 +1283,58 @@ inventing an interpretation.
 Return only the structured AnalyticalPlan.
 """
 
-        agent_1_result = Runner.run_sync(
-            business_analyst,
-            agent_1_prompt,
+        agent_1_executor = AgentsSDKExecutor(
+            model_factory=self.model_factory
         )
+
+        fallback_tiers = [
+            ModelTier.FAST,
+            ModelTier.BALANCED,
+            ModelTier.REASONING,
+        ]
+
+        fallback_tiers = [
+            tier
+            for tier in fallback_tiers
+            if tier != business_analysis_routing.tier
+        ]
+
+        agent_1_execution = agent_1_executor.run(
+            primary_tier=business_analysis_routing.tier,
+            fallback_tiers=fallback_tiers,
+            agent_factory=create_business_analyst,
+            prompt=agent_1_prompt,
+        )
+
+        agent_1_result = agent_1_execution.result
 
         analytical_plan = (
             agent_1_result.final_output
+        )
+
+        tracer.add_event(
+            event_type=TraceEventType.ROUTING,
+            message="Business Analyst model execution completed.",
+            metadata={
+                "primary_tier":
+                    business_analysis_routing.tier.value,
+                "attempts": [
+                    {
+                        "tier":
+                            attempt.tier.value,
+                        "model":
+                            attempt.model_name,
+                        "attempt":
+                            attempt.attempt_number,
+                        "success":
+                            attempt.success,
+                        "error_type":
+                            attempt.error_type,
+                    }
+                    for attempt
+                    in agent_1_execution.attempts
+                ],
+            },
         )
 
         context.analytical_plan = (
@@ -1307,12 +1355,13 @@ Return only the structured AnalyticalPlan.
         # SQL GENERATION + VALIDATION + EXECUTION
         # ==========================================================
 
-        sql_model, sql_routing = self._route_model(
+        
+        _sql_model, sql_routing = self._route_model(
             user_request=user_request,
-            sql_complexity=3,
-            ambiguity=2,
-            reasoning_required=True,
-            output_complexity=2,
+            sql_complexity=2,
+            ambiguity=1,
+            reasoning_required=False,
+            output_complexity=1,
             schema_size=max(
                 schema_size,
                 1,
@@ -1352,16 +1401,74 @@ Return only the structured AnalyticalPlan.
                     },
                 )
 
-                generated_sql = generate_sql(
-                    model=sql_model,
-                    user_request=user_request,
-                    plan=analytical_plan,
-                    schema=data_schema,
-                    feedback=sql_feedback,
+                def _generate_sql_with_model(
+                    model,
+                    tier,
+                    model_name,
+                ):
+                    return generate_sql(
+                        model=model,
+                        user_request=user_request,
+                        plan=analytical_plan,
+                        schema=data_schema,
+                        feedback=sql_feedback,
+                    )
+
+                fallback_tiers = [
+                    ModelTier.FAST,
+                    ModelTier.BALANCED,
+                    ModelTier.REASONING,
+                ]
+
+                fallback_tiers = [
+                    tier
+                    for tier in fallback_tiers
+                    if tier != sql_routing.tier
+                ]
+
+                sql_generation_execution = (
+                    self.model_factory.run_with_fallback(
+                        primary_tier=sql_routing.tier,
+                        fallback_tiers=fallback_tiers,
+                        execute=_generate_sql_with_model,
+                    )
+                )
+
+                generated_sql = (
+                    sql_generation_execution.result
+                )
+
+                generated_sql = _normalize_generated_sql(
+                    generated_sql
                 )
 
                 context.generated_sql = (
                     generated_sql
+                )
+
+                tracer.add_event(
+                    event_type=TraceEventType.ROUTING,
+                    message="SQL generation model execution completed.",
+                    metadata={
+                        "primary_tier":
+                            sql_routing.tier.value,
+                        "attempts": [
+                            {
+                                "tier":
+                                    attempt_result.tier.value,
+                                "model":
+                                    attempt_result.model_name,
+                                "attempt":
+                                    attempt_result.attempt_number,
+                                "success":
+                                    attempt_result.success,
+                                "error_type":
+                                    attempt_result.error_type,
+                            }
+                            for attempt_result
+                            in sql_generation_execution.attempts
+                        ],
+                    },
                 )
 
                 tracer.add_event(
@@ -1609,12 +1716,13 @@ Return only the structured AnalyticalPlan.
         # AGENT 2 — INSIGHT + EVIDENCE VERIFICATION
         # ==========================================================
 
+        
         insight_model, insight_routing = self._route_model(
             user_request=user_request,
-            sql_complexity=2,
+            sql_complexity=1,
             ambiguity=1,
-            reasoning_required=True,
-            output_complexity=3,
+            reasoning_required=False,
+            output_complexity=2,
             schema_size=max(
                 schema_size,
                 1,
@@ -1662,12 +1770,6 @@ Return only the structured AnalyticalPlan.
                     },
                 )
 
-                insight_agent = (
-                    create_insight_verifier(
-                        model=insight_model
-                    )
-                )
-
                 agent_2_prompt = f"""
 Verify the analytical result using only the supplied evidence.
 
@@ -1689,9 +1791,54 @@ The SQL result is authoritative.
 Return only the structured InsightAnalysis.
 """
 
-                agent_2_result = Runner.run_sync(
-                    insight_agent,
-                    agent_2_prompt,
+                agent_2_executor = AgentsSDKExecutor(
+                    model_factory=self.model_factory
+                )
+
+                fallback_tiers = [
+                    ModelTier.FAST,
+                    ModelTier.BALANCED,
+                    ModelTier.REASONING,
+                ]
+
+                fallback_tiers = [
+                    tier
+                    for tier in fallback_tiers
+                    if tier != insight_routing.tier
+                ]
+
+                agent_2_execution = agent_2_executor.run(
+                    primary_tier=insight_routing.tier,
+                    fallback_tiers=fallback_tiers,
+                    agent_factory=create_insight_verifier,
+                    prompt=agent_2_prompt,
+                )
+
+                agent_2_result = agent_2_execution.result
+
+                tracer.add_event(
+                    event_type=TraceEventType.ROUTING,
+                    message="Insight Verification model execution completed.",
+                    metadata={
+                        "primary_tier":
+                            insight_routing.tier.value,
+                        "attempts": [
+                            {
+                                "tier":
+                                    attempt_result.tier.value,
+                                "model":
+                                    attempt_result.model_name,
+                                "attempt":
+                                    attempt_result.attempt_number,
+                                "success":
+                                    attempt_result.success,
+                                "error_type":
+                                    attempt_result.error_type,
+                            }
+                            for attempt_result
+                            in agent_2_execution.attempts
+                        ],
+                    },
                 )
 
                 insight_analysis = (
@@ -1825,12 +1972,13 @@ Return only the structured InsightAnalysis.
         # AGENT 3 — DATA STORYTELLING
         # ==========================================================
 
+        
         story_model, story_routing = self._route_model(
             user_request=user_request,
             sql_complexity=1,
             ambiguity=1,
-            reasoning_required=True,
-            output_complexity=4,
+            reasoning_required=False,
+            output_complexity=2,
             schema_size=max(
                 schema_size,
                 1,
@@ -1850,12 +1998,74 @@ Return only the structured InsightAnalysis.
             },
         )
 
+        # ----------------------------------------------------------
+        # BOUNDED EVIDENCE CONTEXT FOR AGENT 3
+        # ----------------------------------------------------------
+        #
+        # Keep the complete SQL result in SessionContext for:
+        # - factual validation
+        # - evaluation
+        # - application output
+        #
+        # Agent 3 does not need thousands of raw rows in its prompt.
+        # Large retrieval results can make the storytelling prompt
+        # unnecessarily large and can reduce model reliability.
+        #
+        # Agent 2 remains responsible for evidence-based interpretation.
+        # Agent 3 receives compact raw evidence plus the verified insights.
+        # ----------------------------------------------------------
+
+        sql_result_data = context.sql_result.model_dump()
+
+        sql_columns = list(
+            sql_result_data.get("columns") or []
+        )
+
+        sql_rows = list(
+            sql_result_data.get("rows") or []
+        )
+
+        sql_row_count = int(
+            sql_result_data.get("row_count")
+            or len(sql_rows)
+        )
+
+        STORY_EVIDENCE_SAMPLE_SIZE = 20
+
+        if sql_row_count <= STORY_EVIDENCE_SAMPLE_SIZE * 2:
+
+            bounded_sql_rows = sql_rows
+
+        else:
+
+            bounded_sql_rows = (
+                sql_rows[:STORY_EVIDENCE_SAMPLE_SIZE]
+                + sql_rows[-STORY_EVIDENCE_SAMPLE_SIZE:]
+            )
+
+        story_sql_evidence = {
+            "columns":
+                sql_columns,
+
+            "row_count":
+                sql_row_count,
+
+            "rows_in_prompt":
+                len(bounded_sql_rows),
+
+            "rows_truncated":
+                sql_row_count > len(bounded_sql_rows),
+
+            "sample_rows":
+                bounded_sql_rows,
+        }
+
         story_context = {
             "analytical_plan":
                 analytical_plan.model_dump(),
 
-            "sql_result":
-                context.sql_result.model_dump(),
+            "sql_result_evidence":
+                story_sql_evidence,
 
             "analysis_result":
                 analysis_result.model_dump(),
@@ -1974,12 +2184,6 @@ Return ONLY the structured BusinessStory.
                     },
                 )
 
-                storyteller = (
-                    create_data_storyteller(
-                        model=story_model
-                    )
-                )
-
                 if attempt == 0:
 
                     agent_3_prompt = (
@@ -2052,9 +2256,54 @@ FACTUAL RULES
 Return ONLY the structured BusinessStory.
 """
 
-                agent_3_result = Runner.run_sync(
-                    storyteller,
-                    agent_3_prompt,
+                agent_3_executor = AgentsSDKExecutor(
+                    model_factory=self.model_factory
+                )
+
+                fallback_tiers = [
+                    ModelTier.FAST,
+                    ModelTier.BALANCED,
+                    ModelTier.REASONING,
+                ]
+
+                fallback_tiers = [
+                    tier
+                    for tier in fallback_tiers
+                    if tier != story_routing.tier
+                ]
+
+                agent_3_execution = agent_3_executor.run(
+                    primary_tier=story_routing.tier,
+                    fallback_tiers=fallback_tiers,
+                    agent_factory=create_data_storyteller,
+                    prompt=agent_3_prompt,
+                )
+
+                agent_3_result = agent_3_execution.result
+
+                tracer.add_event(
+                    event_type=TraceEventType.ROUTING,
+                    message="Data Storyteller model execution completed.",
+                    metadata={
+                        "primary_tier":
+                            story_routing.tier.value,
+                        "attempts": [
+                            {
+                                "tier":
+                                    attempt_result.tier.value,
+                                "model":
+                                    attempt_result.model_name,
+                                "attempt":
+                                    attempt_result.attempt_number,
+                                "success":
+                                    attempt_result.success,
+                                "error_type":
+                                    attempt_result.error_type,
+                            }
+                            for attempt_result
+                            in agent_3_execution.attempts
+                        ],
+                    },
                 )
 
                 candidate_story = (

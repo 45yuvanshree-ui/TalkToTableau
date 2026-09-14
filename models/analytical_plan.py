@@ -6,9 +6,9 @@ class AnalyticalPlan(BaseModel):
 
     analytical_objective: str = Field(
         description=(
-            "The main analytical objective, such as aggregation, "
-            "comparison, ratio, percentage, trend, ranking, "
-            "distribution, or anomaly analysis."
+            "The main analytical objective, such as retrieval, aggregation, "
+            "comparison, ratio, percentage, ranking, distribution, or "
+            "anomaly analysis."
         )
     )
 
@@ -16,7 +16,7 @@ class AnalyticalPlan(BaseModel):
         default=None,
         description=(
             "The primary analytical operation requested by the user. "
-            "Examples include aggregation, ratio, percentage, "
+            "Examples include retrieve, aggregation, ratio, percentage, "
             "comparison, trend, ranking, distribution, or anomaly."
         ),
     )
@@ -27,6 +27,16 @@ class AnalyticalPlan(BaseModel):
             "A precise description of the base metric being calculated. "
             "Examples include total revenue, average order value, "
             "customer count, or distinct customer count."
+        ),
+    )
+
+    output_fields: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Fields the user explicitly wants returned in the result. "
+            "Use this for direct retrieval/list requests. "
+            "These fields are NOT grouping dimensions unless the user "
+            "explicitly asks for a breakdown or grouping."
         ),
     )
 
@@ -42,8 +52,8 @@ class AnalyticalPlan(BaseModel):
         default_factory=list,
         description=(
             "Fields explicitly requested as grouping or breakdown "
-            "dimensions. A field used only as a condition inside a "
-            "metric must not be included here."
+            "dimensions. A field that is only requested as an output "
+            "field must NOT be placed here."
         ),
     )
 
