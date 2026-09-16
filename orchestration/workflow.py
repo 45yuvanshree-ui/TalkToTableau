@@ -985,6 +985,62 @@ Return only the structured SQLGenerationOutput.
 
         return story
 
+    @staticmethod
+    def _build_story_numeric_evidence(sql_result) -> str:
+        """
+        Build a compact deterministic whitelist of numerical values that
+        Agent 3 is allowed to mention in the final story.
+
+        The SQL result remains the authoritative numerical source. This
+        whitelist is generated from the complete result, not only the
+        bounded prompt sample.
+        """
+        values: list[float] = []
+
+        for row in sql_result.rows:
+            for value in row:
+                if isinstance(value, bool):
+                    continue
+
+                if isinstance(value, (int, float)):
+                    numeric_value = float(value)
+                    if numeric_value not in values:
+                        values.append(numeric_value)
+
+        if not values:
+            return "No numerical values are available in the SQL result."
+
+        values.sort()
+
+        MAX_INLINE_VALUES = 100
+
+        if len(values) <= MAX_INLINE_VALUES:
+            formatted_values = ", ".join(
+                f"{value:g}"
+                for value in values
+            )
+            return (
+                "Allowed numerical values from the complete SQL result "
+                f"({len(values)} unique values): {formatted_values}"
+            )
+
+        sample_values = values[:50] + values[-50:]
+
+        formatted_values = ", ".join(
+            f"{value:g}"
+            for value in sample_values
+        )
+
+        return (
+            "The SQL result contains more than "
+            f"{MAX_INLINE_VALUES} unique numerical values. "
+            "Use numerical values only when they are directly visible "
+            "in the supplied SQL evidence or verified Agent 2 evidence. "
+            "Do not invent or calculate new values. "
+            f"Boundary/sample SQL values: {formatted_values}"
+        )
+
+
     # ==============================================================
     # MAIN WORKFLOW
     # ==============================================================
@@ -2060,12 +2116,21 @@ Return only the structured InsightAnalysis.
                 bounded_sql_rows,
         }
 
+        story_numeric_evidence = (
+            self._build_story_numeric_evidence(
+                context.sql_result
+            )
+        )
+
         story_context = {
             "analytical_plan":
                 analytical_plan.model_dump(),
 
             "sql_result_evidence":
                 story_sql_evidence,
+
+            "numeric_evidence":
+                story_numeric_evidence,
 
             "analysis_result":
                 analysis_result.model_dump(),
@@ -2153,7 +2218,14 @@ FACTUAL VALIDATION
 ==================================================
 
 - Any numerical value mentioned must exactly match a value
-  present in the SQL result.
+  present in the COMPLETE SQL result.
+- The `numeric_evidence` field in the context is the numerical whitelist.
+- If a number is not in that whitelist, DO NOT mention it.
+- Do not copy a numerical value from Agent 2 merely because Agent 2
+  mentioned it if that value is not present in the SQL result.
+- Do not calculate a new numerical value such as a difference,
+  percentage, ratio, average, or growth value unless that exact
+  numerical value is already present in the SQL result.
 - Highest claims must match the actual highest value.
 - Lowest claims must match the actual lowest value.
 - Do not claim a category is highest or lowest unless the
@@ -2198,6 +2270,10 @@ deterministic validation.
 
 Validation failure:
 {last_story_error}
+
+The previous story contained a factual claim that the deterministic
+validator rejected. Remove the rejected numerical value or claim
+completely. Do not repeat it in the regenerated story.
 
 Create the BusinessStory again.
 
@@ -2244,7 +2320,12 @@ FACTUAL RULES
 
 - Use only the supplied evidence.
 - Never invent numbers.
-- Every numerical value must exactly match the SQL result.
+- Every numerical value must exactly match the COMPLETE SQL result.
+- The `numeric_evidence` field is the numerical whitelist.
+- If a number is not in that whitelist, remove it from the story.
+- Do not copy a number from Agent 2 if it is not present in the SQL result.
+- Do not calculate a new difference, percentage, ratio, average, or
+  growth value unless that exact value is present in the SQL result.
 - Never invent categories.
 - Never invent dimensions.
 - Never invent causes.
@@ -2412,6 +2493,7 @@ Return ONLY the structured BusinessStory.
                         raise RuntimeError(
                             f"Agent 3 failed after "
                             f"{MAX_STORY_RETRIES + 1} attempt(s)."
+                            f"Factual validation failed: {factual_reason}"
                         )
 
                     continue
@@ -2451,6 +2533,9 @@ Return ONLY the structured BusinessStory.
                 )
 
                 if attempt >= MAX_STORY_RETRIES:
+
+                    if isinstance(last_story_error, RuntimeError):
+                        raise last_story_error
 
                     raise RuntimeError(
                         f"Agent 3 failed after "

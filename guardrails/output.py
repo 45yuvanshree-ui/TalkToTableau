@@ -390,8 +390,21 @@ def _validate_extreme_claims(
 def validate_story_factual_claims(
     story: BusinessStory,
     sql_result: SQLResult,
+    insight_analysis: InsightAnalysis | None = None,
 ) -> tuple[bool, str | None]:
-    """Validate factual numerical and ranking claims in a story."""
+    """
+    Validate factual numerical and ranking claims in a business story.
+
+    Numerical claims are considered supported when they are present in:
+    1. the authoritative SQL result, or
+    2. explicitly supported evidence produced by Agent 2.
+
+    Agent 2 evidence is only trusted when:
+        evidence.is_supported == True
+
+    Ranking claims remain deterministically validated against the
+    SQL result itself.
+    """
 
     story_text_parts = [
         story.summary,
@@ -411,26 +424,69 @@ def validate_story_factual_claims(
         story_text_parts
     )
 
-    story_numbers = _extract_story_numbers(
-        story_text
-    )
+    # --------------------------------------------------------------
+    # SQL NUMERICAL EVIDENCE
+    # --------------------------------------------------------------
 
     sql_numbers = _numeric_values_from_sql(
         sql_result
     )
 
-    normalized_sql_numbers = {
+    supported_numbers = {
         round(value, 10)
         for value in sql_numbers
     }
 
+    # --------------------------------------------------------------
+    # AGENT 2 VERIFIED NUMERICAL EVIDENCE
+    # --------------------------------------------------------------
+
+    if insight_analysis is not None:
+        for insight in insight_analysis.insights:
+            for evidence in insight.evidence:
+
+                if not evidence.is_supported:
+                    continue
+
+                evidence_text_parts = [
+                    evidence.claim,
+                    evidence.supporting_data,
+                ]
+
+                evidence_text = "\n".join(
+                    part
+                    for part in evidence_text_parts
+                    if part
+                )
+
+                for number in _extract_story_numbers(
+                    evidence_text
+                ):
+                    supported_numbers.add(
+                        round(number, 10)
+                    )
+
+    # --------------------------------------------------------------
+    # STORY NUMERICAL VALIDATION
+    # --------------------------------------------------------------
+
+    story_numbers = _extract_story_numbers(
+        story_text
+    )
+
     for number in story_numbers:
-        if round(number, 10) not in normalized_sql_numbers:
+
+        if round(number, 10) not in supported_numbers:
+
             return (
                 False,
-                f"Story contains unsupported numerical value: "
+                "Story contains unsupported numerical value: "
                 f"{number:g}.",
             )
+
+    # --------------------------------------------------------------
+    # RANKING VALIDATION
+    # --------------------------------------------------------------
 
     is_valid, reason = _validate_extreme_claims(
         text=story_text,
