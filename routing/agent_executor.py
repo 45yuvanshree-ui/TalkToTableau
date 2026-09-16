@@ -18,6 +18,7 @@ validation, or story validation.
 from __future__ import annotations
 
 from dataclasses import replace
+from time import perf_counter
 from typing import Callable, TypeVar
 
 from agents import Agent, ModelSettings, Runner
@@ -117,21 +118,84 @@ class AgentsSDKExecutor:
 
         def execute(
             model,
-            _tier: ModelTier,
-            _model_name: str,
+            tier: ModelTier,
+            model_name: str,
         ):
-            agent = agent_factory(
-                model
+            print(
+                "\n"
+                + "-" * 70
+                + "\n"
+                + "LLM ATTEMPT START"
+                + "\n"
+                + f"Tier: {tier.value}"
+                + "\n"
+                + f"Model: {model_name}"
+                + "\n"
+                + "-" * 70
             )
 
-            agent = self._apply_execution_limits(
-                agent
-            )
+            started = perf_counter()
 
-            return Runner.run_sync(
-                agent,
-                prompt,
-            )
+            try:
+                agent = agent_factory(
+                    model
+                )
+
+                agent = self._apply_execution_limits(
+                    agent
+                )
+
+                result = Runner.run_sync(
+                    agent,
+                    prompt,
+                )
+
+                elapsed_seconds = (
+                    perf_counter() - started
+                )
+
+                print(
+                    "\n"
+                    + "-" * 70
+                    + "\n"
+                    + "LLM ATTEMPT SUCCESS"
+                    + "\n"
+                    + f"Tier: {tier.value}"
+                    + "\n"
+                    + f"Model: {model_name}"
+                    + "\n"
+                    + f"Duration: {elapsed_seconds:.2f} seconds"
+                    + "\n"
+                    + "-" * 70
+                )
+
+                return result
+
+            except Exception as error:
+                elapsed_seconds = (
+                    perf_counter() - started
+                )
+
+                print(
+                    "\n"
+                    + "-" * 70
+                    + "\n"
+                    + "LLM ATTEMPT FAILED"
+                    + "\n"
+                    + f"Tier: {tier.value}"
+                    + "\n"
+                    + f"Model: {model_name}"
+                    + "\n"
+                    + f"Duration: {elapsed_seconds:.2f} seconds"
+                    + "\n"
+                    + f"Error: {type(error).__name__}"
+                    + "\n"
+                    + f"Message: {error}"
+                    + "\n"
+                    + "-" * 70
+                )
+
+                raise
 
         return self.model_factory.run_with_fallback(
             primary_tier=primary_tier,

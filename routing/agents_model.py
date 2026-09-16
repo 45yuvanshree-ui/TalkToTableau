@@ -4,11 +4,11 @@ from time import perf_counter
 from typing import Callable, TypeVar
 
 from agents import Agent, Model, OpenAIProvider, Runner
+from openai import AsyncOpenAI
 
 from .fallback import (
     FallbackResult,
     LLMFallbackExecutor,
-    build_fallback_attempts,
 )
 from .models import ModelTier
 from .model_pool import (
@@ -22,7 +22,6 @@ from .provider import LLMProviderConfig
 from .model_catalog import (
     ModelCatalogError,
     OpenRouterModelCatalog,
-    OpenRouterModelMetadata,
 )
 from .model_catalog_adapter import (
     metadata_to_candidate,
@@ -52,15 +51,12 @@ class AgentsModelFactory:
     - selecting compatible models from the pool
     - providing bounded provider/model fallback
     - recording model health
-    - optionally discovering additional OpenRouter models
+    - discovering additional OpenRouter models
     - automatically assigning discovered models to routing tiers
 
     It does not decide whether a request should be FAST,
     BALANCED, or REASONING from the user's business intent.
     That decision belongs to AdaptiveRouter.
-
-    ModelTieringPolicy only classifies discovered provider models
-    using deterministic provider metadata.
     """
 
     def __init__(
@@ -72,7 +68,9 @@ class AgentsModelFactory:
             provider_config or LLMProviderConfig()
         )
 
-        self.fallback_executor = LLMFallbackExecutor()
+        self.fallback_executor = (
+            LLMFallbackExecutor()
+        )
 
         self.model_pool = (
             model_pool
@@ -88,6 +86,10 @@ class AgentsModelFactory:
             ModelTieringPolicy()
         )
 
+    # ==============================================================
+    # MODEL CREATION
+    # ==============================================================
+
     def create_model(
         self,
         model_name: str | ModelTier | None = None,
@@ -95,18 +97,13 @@ class AgentsModelFactory:
         """
         Create an Agents SDK model.
 
-        Backward compatibility:
+        If a concrete model name is supplied, it is used directly.
 
-        - If a concrete model-name string is supplied, it is used
-          directly.
-        - If a ModelTier is supplied, the appropriate model is
-          selected through create_model_for_tier().
-        - If nothing is supplied, the BALANCED configured model
-          is used.
+        If a ModelTier is supplied, the model is selected from
+        that logical tier.
 
-        This distinction is important because ModelTier values
-        such as ``ModelTier.FAST`` are logical routing tiers, not
-        concrete provider model IDs.
+        If nothing is supplied, the configured BALANCED model
+        is used.
         """
 
         if isinstance(model_name, ModelTier):
@@ -133,29 +130,35 @@ class AgentsModelFactory:
         """
         Create a model for the requested logical routing tier.
 
-        The ModelPool is consulted first. If no suitable pool model
-        exists for the requested tier, the configured provider model
-        for that tier is used.
+        The ModelPool is consulted first.
 
-        The returned Agents SDK model always receives a concrete
-        provider model ID, never a logical tier name.
+        If no suitable pool model exists, the configured
+        provider model for that tier is used.
         """
 
         try:
-            model, _model_name = self.select_model_for_tier(
-                tier
+            model, _model_name = (
+                self.select_model_for_tier(
+                    tier
+                )
             )
 
             return model
 
         except RuntimeError:
-            selected_model = self.provider_config.get_model(
-                tier
+            selected_model = (
+                self.provider_config.get_model(
+                    tier
+                )
             )
 
             return self._create_model_from_name(
                 model_name=selected_model,
             )
+
+    # ==============================================================
+    # MODEL POOL SELECTION
+    # ==============================================================
 
     def rank_models(
         self,
@@ -170,19 +173,22 @@ class AgentsModelFactory:
         """
         Return compatible models ranked by the Omni Router model pool.
 
-        The requested logical tier is used as the primary selection
-        preference.
+        The requested tier is used as the primary routing preference.
 
-        This method does not make a network request.
+        This operation does not contact the provider.
         """
 
         request = ModelSelectionRequest(
             tier=tier,
-            reasoning_required=reasoning_required,
+            reasoning_required=(
+                reasoning_required
+            ),
             structured_output_required=(
                 structured_output_required
             ),
-            tool_calling_required=tool_calling_required,
+            tool_calling_required=(
+                tool_calling_required
+            ),
             sql_generation_required=(
                 sql_generation_required
             ),
@@ -206,47 +212,50 @@ class AgentsModelFactory:
         """
         Select the highest-ranked compatible model.
 
-        This is a deterministic local selection operation based on
-        the current model-pool state.
-
-        It does not contact the LLM provider.
+        This is a local deterministic selection operation.
         """
 
         ranked_models = self.rank_models(
             tier=tier,
-            reasoning_required=reasoning_required,
+            reasoning_required=(
+                reasoning_required
+            ),
             structured_output_required=(
                 structured_output_required
             ),
-            tool_calling_required=tool_calling_required,
+            tool_calling_required=(
+                tool_calling_required
+            ),
             sql_generation_required=(
                 sql_generation_required
             ),
             prefer_free=prefer_free,
         )
 
-        if not ranked_models:
+        tier_models = [
+            ranked
+            for ranked in ranked_models
+            if ranked.candidate.tier == tier
+        ]
+
+        if not tier_models:
             raise RuntimeError(
-                "No available LLM model matches the requested "
-                "capabilities."
+                "No available LLM model matches the "
+                f"requested tier: {tier.value}"
             )
 
-        return ranked_models[0].candidate.name
+        return tier_models[0].candidate.name
 
     def select_model_for_tier(
         self,
         tier: ModelTier,
     ) -> tuple[Model, str]:
         """
-        Select a model from the Omni Router pool and create it.
+        Select and create a model belonging to the requested
+        logical tier.
 
-        This method is the factory's first direct integration point
-        with ModelPool.
-
-        The selected candidate is required to belong to the
-        requested logical tier. This prevents health differences
-        between unrelated tiers from silently changing the logical
-        routing decision made by AdaptiveRouter.
+        Candidates from unrelated tiers are never silently
+        substituted here.
         """
 
         ranked_models = self.rank_models(
@@ -261,8 +270,8 @@ class AgentsModelFactory:
 
         if not tier_models:
             raise RuntimeError(
-                f"No available LLM model is configured for tier: "
-                f"{tier.value}"
+                "No available LLM model is configured "
+                f"for tier: {tier.value}"
             )
 
         selected = tier_models[0]
@@ -276,6 +285,10 @@ class AgentsModelFactory:
             selected.candidate.name,
         )
 
+    # ==============================================================
+    # MODEL HEALTH
+    # ==============================================================
+
     def record_model_success(
         self,
         *,
@@ -284,7 +297,7 @@ class AgentsModelFactory:
         latency_ms: float | None = None,
     ) -> None:
         """
-        Record a successful model execution in the model pool.
+        Record successful execution of a concrete model.
         """
 
         candidate = self.model_pool.get_candidate(
@@ -309,10 +322,7 @@ class AgentsModelFactory:
         cooldown_seconds: int | None = None,
     ) -> None:
         """
-        Record a provider/transient failure in the model pool.
-
-        The tier argument is retained so callers can keep the
-        logical routing context alongside the concrete model.
+        Record a provider/transient model failure.
         """
 
         candidate = self.model_pool.get_candidate(
@@ -336,10 +346,9 @@ class AgentsModelFactory:
         model_name: str,
     ) -> None:
         """
-        Record a semantic/application failure in the model pool.
+        Record a semantic/application model failure.
 
         Semantic failures do not temporarily disable the model.
-        They reduce its historical health score.
         """
 
         candidate = self.model_pool.get_candidate(
@@ -359,14 +368,13 @@ class AgentsModelFactory:
         """
         Rebuild the model pool from the current provider
         configuration.
-
-        This method remains local and deterministic.
-
-        Dynamic provider discovery is intentionally separate and
-        is performed through discover_and_register_models().
         """
 
         self.model_pool = self._build_model_pool()
+
+    # ==============================================================
+    # DYNAMIC MODEL DISCOVERY
+    # ==============================================================
 
     def discover_and_register_models(
         self,
@@ -380,23 +388,10 @@ class AgentsModelFactory:
         priority: int = 0,
     ) -> list[ModelCandidate]:
         """
-        Discover eligible OpenRouter models and register them in
-        the existing ModelPool.
+        Discover eligible OpenRouter models and register them
+        in the existing ModelPool.
 
-        Discovery is additive:
-
-        - configured models remain in the pool
-        - discovered models are added when eligible
-        - duplicates are skipped
-        - unsuitable models are skipped
-        - provider/catalog failures do not break the application
-
-        The logical tier is supplied explicitly by the caller.
-        The catalog itself does not claim to determine FAST,
-        BALANCED, or REASONING quality.
-
-        This method is intentionally limited to OpenRouter because
-        the current dynamic catalog implementation is provider-specific.
+        Discovery is additive.
         """
 
         if self.provider_config.provider != "openrouter":
@@ -412,8 +407,12 @@ class AgentsModelFactory:
 
         try:
             catalog = OpenRouterModelCatalog(
-                api_key=self.provider_config.get_api_key(),
-                base_url=self.provider_config.get_base_url(),
+                api_key=(
+                    self.provider_config.get_api_key()
+                ),
+                base_url=(
+                    self.provider_config.get_base_url()
+                ),
             )
 
             discovered_models = catalog.list_models(
@@ -426,26 +425,39 @@ class AgentsModelFactory:
         ):
             return []
 
-        configured_model_ids = self._configured_model_ids()
+        configured_model_ids = (
+            self._configured_model_ids()
+        )
 
-        eligibility_request = ModelEligibilityRequest(
-            require_text_generation=True,
-            require_text_output=True,
-            require_sql_generation=True,
-            require_free=require_free,
-            require_reasoning=require_reasoning,
-            require_structured_output=(
-                require_structured_output
-            ),
-            require_tool_calling=require_tool_calling,
-            minimum_context_length=minimum_context_length,
+        eligibility_request = (
+            ModelEligibilityRequest(
+                require_text_generation=True,
+                require_text_output=True,
+                require_sql_generation=True,
+                require_free=require_free,
+                require_reasoning=(
+                    require_reasoning
+                ),
+                require_structured_output=(
+                    require_structured_output
+                ),
+                require_tool_calling=(
+                    require_tool_calling
+                ),
+                minimum_context_length=(
+                    minimum_context_length
+                ),
+            )
         )
 
         eligible_models = (
-            self.model_eligibility_policy.filter_unique_models(
+            self.model_eligibility_policy
+            .filter_unique_models(
                 discovered_models,
                 eligibility_request,
-                excluded_model_ids=configured_model_ids,
+                excluded_model_ids=(
+                    configured_model_ids
+                ),
             )
         )
 
@@ -482,21 +494,8 @@ class AgentsModelFactory:
     ) -> list[ModelCandidate]:
         """
         Discover eligible OpenRouter models and automatically
-        assign each model to FAST, BALANCED, or REASONING.
-
-        Tier assignment is deterministic and based only on the
-        provider metadata:
-
-        - reasoning capability -> REASONING
-        - structured output, tool calling, or sufficiently long
-          context -> BALANCED
-        - otherwise -> FAST
-
-        Existing configured models are never replaced.
-
-        Discovery is additive and provider-specific to OpenRouter.
-        If catalog discovery fails, the configured model pool
-        remains operational and this method returns an empty list.
+        assign each discovered model to FAST, BALANCED, or
+        REASONING.
         """
 
         if self.provider_config.provider != "openrouter":
@@ -512,8 +511,12 @@ class AgentsModelFactory:
 
         try:
             catalog = OpenRouterModelCatalog(
-                api_key=self.provider_config.get_api_key(),
-                base_url=self.provider_config.get_base_url(),
+                api_key=(
+                    self.provider_config.get_api_key()
+                ),
+                base_url=(
+                    self.provider_config.get_base_url()
+                ),
             )
 
             discovered_models = catalog.list_models(
@@ -526,26 +529,39 @@ class AgentsModelFactory:
         ):
             return []
 
-        configured_model_ids = self._configured_model_ids()
+        configured_model_ids = (
+            self._configured_model_ids()
+        )
 
-        eligibility_request = ModelEligibilityRequest(
-            require_text_generation=True,
-            require_text_output=True,
-            require_sql_generation=True,
-            require_free=require_free,
-            require_reasoning=require_reasoning,
-            require_structured_output=(
-                require_structured_output
-            ),
-            require_tool_calling=require_tool_calling,
-            minimum_context_length=minimum_context_length,
+        eligibility_request = (
+            ModelEligibilityRequest(
+                require_text_generation=True,
+                require_text_output=True,
+                require_sql_generation=True,
+                require_free=require_free,
+                require_reasoning=(
+                    require_reasoning
+                ),
+                require_structured_output=(
+                    require_structured_output
+                ),
+                require_tool_calling=(
+                    require_tool_calling
+                ),
+                minimum_context_length=(
+                    minimum_context_length
+                ),
+            )
         )
 
         eligible_models = (
-            self.model_eligibility_policy.filter_unique_models(
+            self.model_eligibility_policy
+            .filter_unique_models(
                 discovered_models,
                 eligibility_request,
-                excluded_model_ids=configured_model_ids,
+                excluded_model_ids=(
+                    configured_model_ids
+                ),
             )
         )
 
@@ -555,9 +571,8 @@ class AgentsModelFactory:
 
         for metadata in eligible_models:
             assigned_tier = (
-                self.model_tiering_policy.assign_tier(
-                    metadata
-                )
+                self.model_tiering_policy
+                .assign_tier(metadata)
             )
 
             candidate = metadata_to_candidate(
@@ -576,87 +591,200 @@ class AgentsModelFactory:
 
         return registered_candidates
 
-    def _configured_model_ids(self) -> set[str]:
+    def _configured_model_ids(
+        self,
+    ) -> set[str]:
         """
-        Return all concrete model IDs currently configured through
-        provider environment variables.
+        Return all concrete model IDs currently configured
+        through provider environment variables.
         """
 
         configured: set[str] = set()
 
         for tier in ModelTier:
-            for model_name in self.provider_config.get_models(
-                tier
+            for model_name in (
+                self.provider_config.get_models(
+                    tier
+                )
             ):
                 model_name = model_name.strip()
 
                 if model_name:
-                    configured.add(model_name)
+                    configured.add(
+                        model_name
+                    )
 
         return configured
+
+    # ==============================================================
+    # BOUNDED FALLBACK
+    # ==============================================================
 
     def run_with_fallback(
         self,
         *,
         primary_tier: ModelTier,
-        execute: Callable[[Model, ModelTier, str], T],
+        execute: Callable[
+            [Model, ModelTier, str],
+            T,
+        ],
         fallback_tiers: list[ModelTier] | None = None,
     ) -> FallbackResult[T]:
         """
-        Execute an Agents SDK operation using bounded model fallback.
+        Execute one concrete model for each requested logical tier.
 
-        This is the existing backward-compatible fallback path.
+        AdaptiveRouter determines the logical tier.
 
-        Provider/transient failures are eligible for fallback.
+        For each tier:
+        1. Use the explicitly configured model when available.
+        2. If no configured model exists, use the best available model
+           from ModelPool for that same tier.
 
-        Semantic/application errors are propagated and are NOT
-        silently retried through another model.
+        Fallback progression remains tier-by-tier and bounded by
+        LLMFallbackExecutor.
+
+        ModelPool alternatives are NOT added as separate fallback
+        attempts because doing so could consume the bounded fallback
+        budget before the next logical tier is attempted.
         """
 
-        primary_model_name = self.provider_config.get_model(
-            primary_tier
-        )
+        tiers = [
+            primary_tier,
+            *(
+                fallback_tiers
+                or []
+            ),
+        ]
 
-        fallback_pairs: list[tuple[ModelTier, str]] = []
+        attempts: list[
+            tuple[ModelTier, str]
+        ] = []
 
-        if fallback_tiers:
-            for tier in fallback_tiers:
-                model_name = self.provider_config.get_model(
+        seen_tiers: set[ModelTier] = set()
+
+        for tier in tiers:
+            # ---------------------------------------------------------
+            # Avoid duplicate logical tiers.
+            # ---------------------------------------------------------
+            if tier in seen_tiers:
+                continue
+
+            seen_tiers.add(tier)
+
+            # ---------------------------------------------------------
+            # 1. Prefer the explicitly configured model.
+            #
+            # This is important for:
+            # - environment configuration
+            # - deterministic tests
+            # - predictable routing
+            # ---------------------------------------------------------
+            configured_model = (
+                self.provider_config.get_model(
                     tier
                 )
+            )
 
-                fallback_pairs.append(
+            model_name: str | None = None
+
+            if configured_model:
+                model_name = configured_model
+
+            # ---------------------------------------------------------
+            # 2. If there is no configured model for this tier,
+            #    select ONE model from ModelPool for this tier.
+            #
+            # Never add multiple pool candidates here because fallback
+            # attempts are tier-level and bounded.
+            # ---------------------------------------------------------
+            if not model_name:
+                try:
+                    ranked_models = self.rank_models(
+                        tier=tier
+                    )
+                except Exception:
+                    ranked_models = []
+
+                for ranked in ranked_models:
+                    candidate = ranked.candidate
+
+                    if candidate.tier != tier:
+                        continue
+
+                    model_name = candidate.name
+                    break
+
+            # ---------------------------------------------------------
+            # 3. Add exactly one concrete model for this logical tier.
+            # ---------------------------------------------------------
+            if model_name:
+                attempts.append(
                     (
                         tier,
                         model_name,
                     )
                 )
 
-        attempts = build_fallback_attempts(
-            primary_tier=primary_tier,
-            primary_model=primary_model_name,
-            fallback_tiers=fallback_pairs,
-        )
+        # -------------------------------------------------------------
+        # No usable models at all.
+        # -------------------------------------------------------------
+        if not attempts:
+            raise RuntimeError(
+                "No LLM models are available for the requested tiers."
+            )
 
+        # -------------------------------------------------------------
+        # Execute through the existing bounded fallback executor.
+        # -------------------------------------------------------------
         def execute_attempt(
             tier: ModelTier,
             model_name: str,
         ) -> T:
             model = self._create_model_from_name(
-                model_name=model_name,
+                model_name=model_name
             )
 
-            return execute(
-                model,
-                tier,
-                model_name,
-            )
+            start_time = perf_counter()
+
+            try:
+                result = execute(
+                    model,
+                    tier,
+                    model_name,
+                )
+
+                latency_ms = (
+                    perf_counter()
+                    - start_time
+                ) * 1000.0
+
+                self.record_model_success(
+                    tier=tier,
+                    model_name=model_name,
+                    latency_ms=latency_ms,
+                )
+
+                return result
+
+            except Exception as exc:
+                latency_ms = (
+                    perf_counter()
+                    - start_time
+                ) * 1000.0
+
+                self._record_failure_from_exception(
+                    tier=tier,
+                    model_name=model_name,
+                    latency_ms=latency_ms,
+                    error=exc,
+                )
+
+                raise
 
         return self.fallback_executor.run(
             attempts=attempts,
             execute=execute_attempt,
         )
-
     def run_agent_with_fallback(
         self,
         *,
@@ -665,16 +793,13 @@ class AgentsModelFactory:
         instructions: str,
         input_text: str,
         fallback_tiers: list[ModelTier] | None = None,
-    ):
+    ) -> FallbackResult:
         """
-        Convenience wrapper for executing a real Agents SDK Agent
-        through Runner.run_sync() with bounded fallback.
+        Run an OpenAI Agents SDK Agent with bounded model fallback.
 
-        A new Agent is created for each model attempt so that the
-        fallback model is actually used by the Agents SDK.
-
-        This method preserves the original fallback API and remains
-        separate from the Omni Router model-pool execution path.
+        The requested logical tier is selected first. If a transient
+        provider failure occurs, the fallback executor tries the next
+        eligible model.
         """
 
         def execute(
@@ -698,12 +823,18 @@ class AgentsModelFactory:
             fallback_tiers=fallback_tiers,
             execute=execute,
         )
+    # ==============================================================
+    # DIRECT MODEL-POOL EXECUTION
+    # ==============================================================
 
     def run_with_model_pool(
         self,
         *,
         tier: ModelTier,
-        execute: Callable[[Model, ModelTier, str], T],
+        execute: Callable[
+            [Model, ModelTier, str],
+            T,
+        ],
         reasoning_required: bool = False,
         structured_output_required: bool = False,
         tool_calling_required: bool = False,
@@ -712,33 +843,29 @@ class AgentsModelFactory:
         max_attempts: int = 3,
     ) -> FallbackResult[T]:
         """
-        Execute an operation using the ranked Omni Router model pool.
+        Execute an operation using the ranked Omni Router
+        model pool.
 
-        The pool determines the initial model ordering.
+        This path is intended for direct model-pool execution.
 
-        Provider/transient failures:
+        Provider failures:
+        - update provider health
+        - temporarily remove the model
+        - continue to another model
 
-        - record provider failure
-        - temporarily remove the model from selection
-        - continue to the next ranked candidate
-
-        Known semantic/application failures:
-
-        - record semantic failure
-        - continue to the next candidate
+        Known semantic failures:
+        - update semantic health
+        - continue according to fallback policy
 
         Unknown/internal failures:
-
-        - do not modify model health
+        - do not blame the model
         - propagate immediately
 
         Successful execution:
-
-        - record model health and latency
+        - record latency and health
         - return immediately
 
-        The number of model attempts is bounded to prevent
-        uncontrolled retry loops.
+        Attempts are bounded.
         """
 
         if max_attempts < 1:
@@ -753,32 +880,54 @@ class AgentsModelFactory:
 
         request = ModelSelectionRequest(
             tier=tier,
-            reasoning_required=reasoning_required,
+            reasoning_required=(
+                reasoning_required
+            ),
             structured_output_required=(
                 structured_output_required
             ),
-            tool_calling_required=tool_calling_required,
+            tool_calling_required=(
+                tool_calling_required
+            ),
             sql_generation_required=(
                 sql_generation_required
             ),
             prefer_free=prefer_free,
         )
 
-        ranked_models = self.model_pool.rank(
-            request
+        ranked_models = (
+            self.model_pool.rank(
+                request
+            )
         )
 
         if not ranked_models:
             raise RuntimeError(
-                "No available LLM model matches the requested "
-                "capabilities."
+                "No available LLM model matches "
+                "the requested capabilities."
             )
 
-        selected_models = ranked_models[
+        # Direct model-pool execution must also respect
+        # the requested logical tier.
+        tier_models = [
+            ranked
+            for ranked in ranked_models
+            if ranked.candidate.tier == tier
+        ]
+
+        if not tier_models:
+            raise RuntimeError(
+                "No available LLM model matches "
+                f"the requested tier: {tier.value}"
+            )
+
+        selected_models = tier_models[
             :max_attempts
         ]
 
-        attempts: list[tuple[ModelTier, str]] = [
+        attempts: list[
+            tuple[ModelTier, str]
+        ] = [
             (
                 ranked.candidate.tier,
                 ranked.candidate.name,
@@ -793,8 +942,10 @@ class AgentsModelFactory:
             started = perf_counter()
 
             try:
-                model = self._create_model_from_name(
-                    model_name=model_name,
+                model = (
+                    self._create_model_from_name(
+                        model_name=model_name,
+                    )
                 )
 
                 result = execute(
@@ -849,10 +1000,8 @@ class AgentsModelFactory:
         max_attempts: int = 3,
     ):
         """
-        Convenience wrapper around run_with_model_pool() for a real
-        Agents SDK Agent.
-
-        A new Agent is created for every model attempt.
+        Execute an Agents SDK Agent through the direct
+        model-pool execution path.
         """
 
         def execute(
@@ -874,17 +1023,25 @@ class AgentsModelFactory:
         return self.run_with_model_pool(
             tier=tier,
             execute=execute,
-            reasoning_required=reasoning_required,
+            reasoning_required=(
+                reasoning_required
+            ),
             structured_output_required=(
                 structured_output_required
             ),
-            tool_calling_required=tool_calling_required,
+            tool_calling_required=(
+                tool_calling_required
+            ),
             sql_generation_required=(
                 sql_generation_required
             ),
             prefer_free=prefer_free,
             max_attempts=max_attempts,
         )
+
+    # ==============================================================
+    # FAILURE CLASSIFICATION
+    # ==============================================================
 
     def _record_failure_from_exception(
         self,
@@ -899,24 +1056,28 @@ class AgentsModelFactory:
 
         Provider/transient failures temporarily remove the model.
 
-        Known semantic/application failures reduce the model's
-        historical health score.
+        Known semantic/application failures reduce historical
+        model health.
 
-        Unexpected internal failures do not modify model health,
-        because there is insufficient evidence that the selected
-        model caused the problem.
+        Unexpected internal failures do not modify model health.
         """
 
-        candidate = self.model_pool.get_candidate(
-            provider=self.provider_config.provider,
-            model_name=model_name,
+        candidate = (
+            self.model_pool.get_candidate(
+                provider=(
+                    self.provider_config.provider
+                ),
+                model_name=model_name,
+            )
         )
 
         if candidate is None:
             return
 
-        if LLMFallbackExecutor.is_provider_failure(
-            error
+        if (
+            LLMFallbackExecutor.is_provider_failure(
+                error
+            )
         ):
             self.record_model_provider_failure(
                 tier=tier,
@@ -924,24 +1085,24 @@ class AgentsModelFactory:
             )
             return
 
-        if self._is_semantic_failure(error):
+        if self._is_semantic_failure(
+            error
+        ):
             self.record_model_semantic_failure(
                 tier=tier,
                 model_name=model_name,
             )
             return
 
-        return
+        # Unknown/internal errors are deliberately
+        # not attributed to the selected model.
 
     @staticmethod
     def _is_semantic_failure(
         error: Exception,
     ) -> bool:
         """
-        Determine whether an exception represents a known
-        model/application semantic failure.
-
-        This classifier is intentionally conservative.
+        Conservative semantic/application failure classifier.
         """
 
         semantic_exception_names = {
@@ -955,44 +1116,62 @@ class AgentsModelFactory:
             "StoryValidationError",
         }
 
-        if error.__class__.__name__ in semantic_exception_names:
-            return True
+        return (
+            error.__class__.__name__
+            in semantic_exception_names
+        )
 
-        return False
+    # ==============================================================
+    # MODEL POOL CONSTRUCTION
+    # ==============================================================
 
-    def _build_model_pool(self) -> ModelPool:
+    def _build_model_pool(
+        self,
+    ) -> ModelPool:
         """
-        Build the local Omni Router model pool from provider
+        Build the Omni Router model pool from provider
         configuration.
 
-        Every configured concrete model becomes one ModelCandidate.
+        Every configured concrete model becomes a candidate.
+
+        Conservative capabilities are used until provider
+        metadata discovery provides stronger information.
         """
 
-        candidates: list[ModelCandidate] = []
+        candidates: list[
+            ModelCandidate
+        ] = []
 
         for tier in ModelTier:
-            model_names = self.provider_config.get_models(
-                tier
+            model_names = (
+                self.provider_config.get_models(
+                    tier
+                )
             )
 
             for priority, model_name in enumerate(
                 model_names,
                 start=1,
             ):
-                capabilities = ModelCapabilities(
-                    text_generation=True,
-                    structured_output=False,
-                    tool_calling=False,
-                    reasoning=(
-                        tier == ModelTier.REASONING
-                    ),
-                    sql_generation=True,
-                    long_context=False,
+                capabilities = (
+                    ModelCapabilities(
+                        text_generation=True,
+                        structured_output=False,
+                        tool_calling=False,
+                        reasoning=(
+                            tier
+                            == ModelTier.REASONING
+                        ),
+                        sql_generation=True,
+                        long_context=False,
+                    )
                 )
 
                 candidate = ModelCandidate(
                     name=model_name,
-                    provider=self.provider_config.provider,
+                    provider=(
+                        self.provider_config.provider
+                    ),
                     tier=tier,
                     is_free=model_name.endswith(
                         ":free"
@@ -1003,8 +1182,12 @@ class AgentsModelFactory:
                         11 - priority,
                     ),
                     metadata={
-                        "configured_tier": tier.value,
-                        "source": "provider_config",
+                        "configured_tier": (
+                            tier.value
+                        ),
+                        "source": (
+                            "provider_config"
+                        ),
                     },
                 )
 
@@ -1016,24 +1199,42 @@ class AgentsModelFactory:
             candidates=candidates,
         )
 
+    # ==============================================================
+    # AGENTS SDK MODEL CREATION
+    # ==============================================================
+
     def _create_model_from_name(
         self,
         *,
         model_name: str,
     ) -> Model:
         """
-        Create an Agents SDK model from a concrete model name.
+        Create an Agents SDK model from a concrete provider
+        model ID.
 
-        Provider configuration is resolved once from the factory,
-        while the concrete model name may change during fallback.
+        The provider endpoint and credentials come from the
+        provider configuration.
+
+        The concrete model name can change during fallback.
         """
 
-        base_url = self.provider_config.get_base_url()
-        api_key = self.provider_config.get_api_key()
+        base_url = (
+            self.provider_config.get_base_url()
+        )
 
-        provider = OpenAIProvider(
+        api_key = (
+            self.provider_config.get_api_key()
+        )
+
+        client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
+            timeout=60.0,
+            max_retries=0,
+        )
+
+        provider = OpenAIProvider(
+            openai_client=client,
             use_responses=False,
             strict_feature_validation=True,
         )
@@ -1048,9 +1249,6 @@ def build_model_pool(
 ) -> ModelPool:
     """
     Build a ModelPool directly from provider configuration.
-
-    This convenience function is useful for diagnostics and tests
-    without constructing an AgentsModelFactory.
     """
 
     factory = AgentsModelFactory(

@@ -1,6 +1,7 @@
 import re
 
-from agents import Agent, Model, Runner
+from agents import Agent, Model, ModelSettings, Runner
+from agents.model_settings import ModelRetrySettings
 from pydantic import BaseModel, Field
 
 from models import AnalyticalPlan
@@ -605,6 +606,10 @@ def create_sql_generator(model: Model) -> Agent:
         instructions=SQL_GENERATOR_INSTRUCTIONS,
         output_type=SQLGenerationOutput,
         model=model,
+        model_settings=ModelSettings(
+            timeout=60.0,
+            retry=ModelRetrySettings(max_retries=0),
+        ),
     )
 
 

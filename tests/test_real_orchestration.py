@@ -1,6 +1,7 @@
-import pytest
-
+import time
 from pathlib import Path
+
+import pytest
 
 from orchestration.workflow import TalkToTableauWorkflow
 
@@ -18,8 +19,17 @@ def test_real_orchestration_with_configured_provider():
         data_file=data_file
     )
 
+    started = time.perf_counter()
+
     context = workflow.run(
         "What was the total revenue by region?"
+    )
+
+    total_time = time.perf_counter() - started
+
+    print(
+        f"\nTOTAL WORKFLOW TIME: "
+        f"{total_time:.2f} seconds"
     )
 
     print("\n" + "=" * 60)
