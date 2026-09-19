@@ -631,21 +631,19 @@ class AgentsModelFactory:
         fallback_tiers: list[ModelTier] | None = None,
     ) -> FallbackResult[T]:
         """
-        Execute one concrete model for each requested logical tier.
+        Execute an LLM operation using an ordered pool of concrete
+        models across the requested logical tiers.
 
-        AdaptiveRouter determines the logical tier.
+        Ordering:
 
-        For each tier:
-        1. Use the explicitly configured model when available.
-        2. If no configured model exists, use the best available model
-           from ModelPool for that same tier.
+        1. Primary configured model from get_model().
+        2. Additional configured models in the same tier.
+        3. Additional ModelPool candidates in the same tier.
+        4. Models from the next fallback tier.
+        5. LLMFallbackExecutor enforces the global attempt limit.
 
-        Fallback progression remains tier-by-tier and bounded by
-        LLMFallbackExecutor.
-
-        ModelPool alternatives are NOT added as separate fallback
-        attempts because doing so could consume the bounded fallback
-        budget before the next logical tier is attempted.
+        This preserves the existing primary-model contract while
+        allowing same-tier model fallback.
         """
 
         tiers = [
@@ -660,64 +658,90 @@ class AgentsModelFactory:
             tuple[ModelTier, str]
         ] = []
 
+        seen_attempts: set[
+            tuple[ModelTier, str]
+        ] = set()
+
         seen_tiers: set[ModelTier] = set()
 
         for tier in tiers:
-            # ---------------------------------------------------------
-            # Avoid duplicate logical tiers.
-            # ---------------------------------------------------------
             if tier in seen_tiers:
                 continue
 
             seen_tiers.add(tier)
 
-            # ---------------------------------------------------------
-            # 1. Prefer the explicitly configured model.
-            #
-            # This is important for:
-            # - environment configuration
-            # - deterministic tests
-            # - predictable routing
-            # ---------------------------------------------------------
-            configured_model = (
+            # -------------------------------------------------
+            # 1. PRIMARY CONFIGURED MODEL
+            # -------------------------------------------------
+            primary_model = (
                 self.provider_config.get_model(
                     tier
                 )
             )
 
-            model_name: str | None = None
+            if primary_model:
+                primary_model = (
+                    primary_model.strip()
+                )
 
-            if configured_model:
-                model_name = configured_model
-
-            # ---------------------------------------------------------
-            # 2. If there is no configured model for this tier,
-            #    select ONE model from ModelPool for this tier.
-            #
-            # Never add multiple pool candidates here because fallback
-            # attempts are tier-level and bounded.
-            # ---------------------------------------------------------
-            if not model_name:
-                try:
-                    ranked_models = self.rank_models(
-                        tier=tier
+                if primary_model:
+                    key = (
+                        tier,
+                        primary_model,
                     )
-                except Exception:
-                    ranked_models = []
 
-                for ranked in ranked_models:
-                    candidate = ranked.candidate
+                    if key not in seen_attempts:
+                        seen_attempts.add(
+                            key
+                        )
 
-                    if candidate.tier != tier:
-                        continue
+                        attempts.append(
+                            (
+                                tier,
+                                primary_model,
+                            )
+                        )
 
-                    model_name = candidate.name
-                    break
+            # -------------------------------------------------
+            # 2. ADDITIONAL CONFIGURED MODELS
+            # -------------------------------------------------
+            try:
+                configured_models = (
+                    self.provider_config.get_models(
+                        tier
+                    )
+                )
+            except Exception:
+                configured_models = []
 
-            # ---------------------------------------------------------
-            # 3. Add exactly one concrete model for this logical tier.
-            # ---------------------------------------------------------
-            if model_name:
+            configured_model_ids = {
+                model.strip()
+                for model in configured_models
+                if model.strip()
+            }
+
+            # get_model() remains authoritative. Expand to additional
+            # configured models only when its result is part of the
+            # provider's configured model list.
+            if primary_model not in configured_model_ids:
+                configured_models = []
+
+            for model_name in configured_models:
+                model_name = model_name.strip()
+
+                if not model_name:
+                    continue
+
+                key = (
+                    tier,
+                    model_name,
+                )
+
+                if key in seen_attempts:
+                    continue
+
+                seen_attempts.add(key)
+
                 attempts.append(
                     (
                         tier,
@@ -725,23 +749,97 @@ class AgentsModelFactory:
                     )
                 )
 
-        # -------------------------------------------------------------
-        # No usable models at all.
-        # -------------------------------------------------------------
+            # -------------------------------------------------
+            # 3. ADDITIONAL MODEL POOL CANDIDATES
+            # -------------------------------------------------
+            #
+            # ModelPool candidates are intentionally added only
+            # when the tier has no explicit fallback model list
+            # beyond the primary configured model.
+            #
+            # This preserves deterministic tier-to-tier fallback:
+            #
+            #   BALANCED primary -> FAST primary -> REASONING primary
+            #
+            # while the normal multi-model execution path can still
+            # use ModelPool candidates through run_with_model_pool().
+            #
+            # Do not inject discovered models ahead of a later
+            # explicitly configured fallback tier. That would consume
+            # the bounded fallback budget before reaching that tier.
+            #
+            # For a tier with multiple explicitly configured models,
+            # those models remain available as same-tier fallbacks.
+            #
+            # -------------------------------------------------
+            try:
+                configured_count = len(
+                    self.provider_config.get_models(
+                        tier
+                    )
+                )
+            except Exception:
+                configured_count = 0
+
+            if configured_count <= 1:
+                try:
+                    ranked_models = self.rank_models(
+                        tier=tier
+                    )
+                except Exception:
+                    ranked_models = []
+
+                # Do not add ModelPool candidates here when another
+                # logical fallback tier remains. The explicit
+                # get_model() configuration defines the tier boundary.
+                has_later_tier = (
+                    tier != tiers[-1]
+                )
+
+                if not has_later_tier:
+                    for ranked in ranked_models:
+                        candidate = ranked.candidate
+
+                        if candidate.tier != tier:
+                            continue
+
+                        model_name = (
+                            candidate.name.strip()
+                        )
+
+                        if not model_name:
+                            continue
+
+                        key = (
+                            tier,
+                            model_name,
+                        )
+
+                        if key in seen_attempts:
+                            continue
+
+                        seen_attempts.add(key)
+
+                        attempts.append(
+                            (
+                                tier,
+                                model_name,
+                            )
+                        )
+
         if not attempts:
             raise RuntimeError(
                 "No LLM models are available for the requested tiers."
             )
 
-        # -------------------------------------------------------------
-        # Execute through the existing bounded fallback executor.
-        # -------------------------------------------------------------
         def execute_attempt(
             tier: ModelTier,
             model_name: str,
         ) -> T:
-            model = self._create_model_from_name(
-                model_name=model_name
+            model = (
+                self._create_model_from_name(
+                    model_name=model_name
+                )
             )
 
             start_time = perf_counter()

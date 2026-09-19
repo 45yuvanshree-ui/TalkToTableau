@@ -26,8 +26,10 @@ class SchemaRetriever:
         """
         Build a normalized DataSchema from a DataSource.
 
-        Supports both the original simple schema format and
-        richer schema metadata.
+        Supports:
+        - original simple dictionary schemas
+        - richer dictionary schemas
+        - PostgreSQL column-metadata list schemas
         """
 
         raw_schema = source.get_schema()
@@ -36,6 +38,77 @@ class SchemaRetriever:
             source_type
             or self._infer_source_type(source)
         )
+
+        # ------------------------------------------------------
+        # Normalize PostgreSQL's list-based schema format
+        # ------------------------------------------------------
+        #
+        # PostgreSQL currently returns:
+        #
+        # [
+        #     {
+        #         "table_schema": "public",
+        #         "table_name": "sales",
+        #         "column_name": "sale_id",
+        #         "data_type": "integer",
+        #     },
+        #     ...
+        # ]
+        #
+        # The rest of SchemaRetriever expects a dictionary
+        # keyed by table name. Convert the PostgreSQL format
+        # here instead of changing PostgresDataSource.
+        #
+        if (
+            isinstance(raw_schema, list)
+            and resolved_source_type == "postgresql"
+        ):
+            normalized_schema: dict[str, dict] = {}
+
+            for item in raw_schema:
+                if not isinstance(item, dict):
+                    continue
+
+                table_name = item.get("table_name")
+                column_name = item.get("column_name")
+
+                if not table_name or not column_name:
+                    continue
+
+                table_name = str(table_name)
+                column_name = str(column_name)
+
+                table_metadata = normalized_schema.setdefault(
+                    table_name,
+                    {
+                        "columns": [],
+                    },
+                )
+
+                table_metadata["columns"].append(
+                    {
+                        "name": column_name,
+                        "data_type": str(
+                            item.get(
+                                "data_type",
+                                "TEXT",
+                            )
+                            or "TEXT"
+                        ),
+                    }
+                )
+
+            raw_schema = normalized_schema
+
+        # ------------------------------------------------------
+        # Defensive validation
+        # ------------------------------------------------------
+
+        if not isinstance(raw_schema, dict):
+            raise TypeError(
+                "Unsupported schema format returned by data source: "
+                f"{type(raw_schema).__name__}"
+            )
 
         tables: list[TableSchema] = []
 
@@ -289,12 +362,45 @@ class SchemaRetriever:
                 connection_string=connection_string
             )
         else:
+            # Preserve the existing API contract.
+            # The current PostgreSQL DataSource expects a
+            # connection string, so construct one here when
+            # individual connection fields are supplied.
+            if not host:
+                raise ValueError(
+                    "PostgreSQL host is required."
+                )
+
+            resolved_port = port or 5432
+
+            if not database:
+                raise ValueError(
+                    "PostgreSQL database is required."
+                )
+
+            if not user:
+                raise ValueError(
+                    "PostgreSQL user is required."
+                )
+
+            if password is None:
+                raise ValueError(
+                    "PostgreSQL password is required."
+                )
+
+            from urllib.parse import quote
+
+            connection_string = (
+                "postgresql://"
+                f"{quote(user, safe='')}:"
+                f"{quote(password, safe='')}@"
+                f"{quote(host, safe='')}:"
+                f"{resolved_port}/"
+                f"{quote(database, safe='')}"
+            )
+
             source = PostgresDataSource(
-                host=host,
-                port=port,
-                database=database,
-                user=user,
-                password=password,
+                connection_string=connection_string
             )
 
         return self.from_source(

@@ -28,6 +28,7 @@ from routing import (
     AgentsSDKExecutor,
     ModelTier,
     RoutingRequest,
+    infer_routing_request,
 )
 from schema import SchemaRetriever
 from sql import SQLExecutor, generate_sql
@@ -93,6 +94,7 @@ class TalkToTableauWorkflow:
         self.analysis_workflow = AnalysisWorkflow()
         self.insight_workflow = InsightVerificationWorkflow()
         self.visualization_workflow = VisualizationWorkflow()
+        self.last_figure = None
 
         self.last_trace = None
 
@@ -142,19 +144,51 @@ class TalkToTableauWorkflow:
     def _route_model(
         self,
         user_request: str,
-        sql_complexity: int = 1,
-        ambiguity: int = 1,
-        reasoning_required: bool = False,
-        output_complexity: int = 1,
+        sql_complexity: int | None = None,
+        ambiguity: int | None = None,
+        reasoning_required: bool | None = None,
+        output_complexity: int | None = None,
         schema_size: int = 1,
     ):
+        """
+        Route the request to an appropriate model tier.
+
+        By default, analytical complexity is inferred deterministically
+        from the user's natural-language business question.
+
+        Explicit routing characteristics remain supported so existing
+        callers and future stage-specific routing can still provide
+        overrides when necessary.
+        """
+
+        inferred_request = infer_routing_request(
+            user_request=user_request,
+            schema_size=max(schema_size, 1),
+        )
+
         routing_request = RoutingRequest(
             user_request=user_request,
-            sql_complexity=sql_complexity,
-            ambiguity=ambiguity,
-            reasoning_required=reasoning_required,
-            output_complexity=output_complexity,
-            schema_size=schema_size,
+            sql_complexity=(
+                inferred_request.sql_complexity
+                if sql_complexity is None
+                else sql_complexity
+            ),
+            ambiguity=(
+                inferred_request.ambiguity
+                if ambiguity is None
+                else ambiguity
+            ),
+            reasoning_required=(
+                inferred_request.reasoning_required
+                if reasoning_required is None
+                else reasoning_required
+            ),
+            output_complexity=(
+                inferred_request.output_complexity
+                if output_complexity is None
+                else output_complexity
+            ),
+            schema_size=max(schema_size, 1),
         )
 
         decision = self.router.route(
@@ -1152,16 +1186,12 @@ Return only the structured SQLGenerationOutput.
             business_analyst_model,
             business_analysis_routing,
         ) = self._route_model(
-            user_request=user_request,
-            sql_complexity=1,
-            ambiguity=1,
-            reasoning_required=False,
-            output_complexity=1,
-            schema_size=max(
-                schema_size,
-                1,
-            ),
-        )
+                user_request=user_request,
+                schema_size=max(
+                    schema_size,
+                    1,
+                ),
+            )
 
         tracer.add_event(
             event_type=TraceEventType.ROUTING,
@@ -1414,10 +1444,6 @@ Return only the structured AnalyticalPlan.
         
         _sql_model, sql_routing = self._route_model(
             user_request=user_request,
-            sql_complexity=2,
-            ambiguity=1,
-            reasoning_required=False,
-            output_complexity=1,
             schema_size=max(
                 schema_size,
                 1,
@@ -1775,10 +1801,6 @@ Return only the structured AnalyticalPlan.
         
         insight_model, insight_routing = self._route_model(
             user_request=user_request,
-            sql_complexity=1,
-            ambiguity=1,
-            reasoning_required=False,
-            output_complexity=2,
             schema_size=max(
                 schema_size,
                 1,
@@ -2004,16 +2026,15 @@ Return only the structured InsightAnalysis.
 
         (
             visualization_result,
-            _figure,
+            figure,
         ) = self.visualization_workflow.run(
             plan=analytical_plan,
             sql_result=context.sql_result,
             analysis_result=analysis_result,
         )
 
-        context.visualization = (
-            visualization_result
-        )
+        context.visualization = visualization_result
+        self.last_figure = figure
 
         tracer.add_event(
             event_type=TraceEventType.VISUALIZATION,
@@ -2031,10 +2052,6 @@ Return only the structured InsightAnalysis.
         
         story_model, story_routing = self._route_model(
             user_request=user_request,
-            sql_complexity=1,
-            ambiguity=1,
-            reasoning_required=False,
-            output_complexity=2,
             schema_size=max(
                 schema_size,
                 1,

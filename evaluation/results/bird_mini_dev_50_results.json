@@ -3,9 +3,9 @@
   "benchmark_size": 50,
   "pilot_size": 50,
   "evaluation_type": "TalkToTableau end-to-end evaluation",
-  "started_at": "2026-09-14T12:25:24.012174+00:00",
-  "last_checkpoint_at": "2026-09-14T12:25:26.307570+00:00",
-  "completed_at": "2026-09-14T12:25:26.307570+00:00",
+  "started_at": "2026-09-16T13:46:21.223543+00:00",
+  "last_checkpoint_at": "2026-09-16T13:57:01.505221+00:00",
+  "completed_at": "2026-09-16T13:57:01.536532+00:00",
   "resumed": false,
   "results": [
     {
@@ -14,34 +14,6 @@
       "difficulty": "simple",
       "question": "Please list the codes of the schools with a total enrollment of over 500.",
       "gold_sql": "SELECT T2.CDSCode FROM schools AS T1 INNER JOIN frpm AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.`Enrollment (K-12)` + T2.`Enrollment (Ages 5-17)` > 500",
-      "workflow_success": false,
-      "sql_generated": false,
-      "sql_executed": false,
-      "gold_sql_executed": false,
-      "result_correct": false,
-      "provider_quota_exhausted": true,
-      "generated_sql": null,
-      "generated_result": null,
-      "gold_result": null,
-      "analysis_result": null,
-      "insights": null,
-      "visualization": null,
-      "story": null,
-      "session_id": null,
-      "trace_id": null,
-      "error_type": "PROVIDER_QUOTA_EXHAUSTED",
-      "error": "LLM provider quota or daily free-model allowance was exhausted before the workflow could complete.",
-      "elapsed_seconds": 2.296,
-      "status": "PROVIDER_QUOTA_EXHAUSTED",
-      "started_at": "2026-09-14T12:25:24.012174+00:00",
-      "completed_at": "2026-09-14T12:25:26.307570+00:00"
-    },
-    {
-      "question_id": 5,
-      "database": "california_schools",
-      "difficulty": "simple",
-      "question": "How many schools with an average score in Math greater than 400 in the SAT test are exclusively virtual?",
-      "gold_sql": "SELECT COUNT(DISTINCT T2.School) FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode WHERE T2.Virtual = 'F' AND T1.AvgScrMath > 400",
       "workflow_success": false,
       "sql_generated": false,
       "sql_executed": false,
@@ -57,12 +29,1848 @@
       "story": null,
       "session_id": null,
       "trace_id": null,
+      "error_type": "WORKFLOW",
+      "error": "RuntimeError: Agent 2 failed after 2 attempt(s).",
+      "elapsed_seconds": 126.283,
+      "status": "PIPELINE_FAIL",
+      "started_at": "2026-09-16T13:46:21.223543+00:00",
+      "completed_at": "2026-09-16T13:48:27.503897+00:00"
+    },
+    {
+      "question_id": 5,
+      "database": "california_schools",
+      "difficulty": "simple",
+      "question": "How many schools with an average score in Math greater than 400 in the SAT test are exclusively virtual?",
+      "gold_sql": "SELECT COUNT(DISTINCT T2.School) FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode WHERE T2.Virtual = 'F' AND T1.AvgScrMath > 400",
+      "workflow_success": true,
+      "sql_generated": true,
+      "sql_executed": true,
+      "gold_sql_executed": true,
+      "result_correct": true,
+      "provider_quota_exhausted": false,
+      "generated_sql": "SELECT COUNT(*)\nFROM satscores\nJOIN schools ON satscores.cds = schools.CDSCode\nWHERE AvgScrMath > 400\n  AND Virtual = 'F'",
+      "generated_result": {
+        "columns": [
+          "COUNT(*)"
+        ],
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "row_count": 1
+      },
+      "gold_result": {
+        "columns": [
+          "COUNT(DISTINCT T2.School)"
+        ],
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "row_count": 1
+      },
+      "analysis_result": {
+        "summary": {
+          "row_count": 1,
+          "columns": [
+            "COUNT(*)"
+          ]
+        },
+        "comparison": null,
+        "trend": null,
+        "anomaly": null
+      },
+      "insights": {
+        "insights": [
+          {
+            "statement": "The number of schools with an average SAT Math score greater than 400 that are exclusively virtual is 4.",
+            "evidence": [
+              {
+                "claim": "The count of schools with an average SAT Math score greater than 400 that are exclusively virtual is 4.",
+                "supporting_data": "The SQL result shows a COUNT(*) of 4 under the specified filters (AvgScrMath > 400 and Virtual = 'F').",
+                "is_supported": true
+              }
+            ],
+            "confidence": "high"
+          }
+        ],
+        "unsupported_claims": [
+          "The number of schools with an average SAT Math score greater than 400 that are exclusively virtual is 4."
+        ],
+        "verification_status": "partially_verified"
+      },
+      "visualization": {
+        "status": "not_visualizable",
+        "spec": null
+      },
+      "story": {
+        "summary": "There are 4 exclusively virtual schools with an average SAT Math score above the specified threshold.",
+        "sections": [
+          {
+            "heading": "Key Finding",
+            "content": "The count of schools that are exclusively virtual and have an average SAT Math score exceeding the required level is 4."
+          },
+          {
+            "heading": "Result Details",
+            "content": "The SQL query returned a single count of 4 after filtering for schools with an average Math score above the benchmark and that are virtual only."
+          }
+        ],
+        "visualization_explanation": "No visualization was generated because the returned analytical result was not suitable for a meaningful visualization.",
+        "recommendations": []
+      },
+      "session_id": "d4764fc4-a4e9-49f5-93a4-f82622108e00",
+      "trace_id": "aefc882f-8dc8-4857-a297-05af049526e0",
       "error_type": null,
       "error": null,
-      "elapsed_seconds": null,
-      "status": "NOT_STARTED",
-      "started_at": null,
-      "completed_at": null
+      "elapsed_seconds": 84.741,
+      "status": "PASS",
+      "started_at": "2026-09-16T13:48:27.510947+00:00",
+      "completed_at": "2026-09-16T13:49:52.252825+00:00",
+      "sql_result": {
+        "columns": [
+          "COUNT(*)"
+        ],
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "row_count": 1
+      },
+      "analytical_plan": {
+        "analytical_objective": "Count schools with an average SAT Math score greater than 400 that are exclusively virtual",
+        "operation": "count",
+        "metric_definition": null,
+        "output_fields": [],
+        "metrics": [
+          "school count"
+        ],
+        "dimensions": [],
+        "filters": [
+          "AvgScrMath > 400",
+          "Virtual = 'F'"
+        ],
+        "metric_conditions": [],
+        "numerator": null,
+        "denominator": null,
+        "time_range": null,
+        "comparison": null,
+        "analytical_question": "How many schools with an average score in Math greater than 400 in the SAT test are exclusively virtual?"
+      },
+      "data_schema": {
+        "source_type": "sqlite",
+        "tables": [
+          {
+            "name": "frpm",
+            "source_type": "sqlite",
+            "columns": [
+              {
+                "name": "CDSCode",
+                "data_type": "TEXT",
+                "primary_key": true,
+                "nullable": false,
+                "description": "CDSCode Format: integer"
+              },
+              {
+                "name": "Academic Year",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Academic Year Format: integer"
+              },
+              {
+                "name": "County Code",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "County Code Format: integer"
+              },
+              {
+                "name": "District Code",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "District Code Format: integer"
+              },
+              {
+                "name": "School Code",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "School Code Format: integer"
+              },
+              {
+                "name": "County Name",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "County Code Format: text"
+              },
+              {
+                "name": "District Name",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "District Name Format: text"
+              },
+              {
+                "name": "School Name",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "School Name Format: text"
+              },
+              {
+                "name": "District Type",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "District Type Format: text"
+              },
+              {
+                "name": "School Type",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "School Type Format: text"
+              },
+              {
+                "name": "Educational Option Type",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Educational Option Type Format: text"
+              },
+              {
+                "name": "NSLP Provision Status",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "NSLP Provision Status Format: text"
+              },
+              {
+                "name": "Charter School (Y/N)",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Charter School (Y/N) Format: integer Known values: 0: N;\n1: Y"
+              },
+              {
+                "name": "Charter School Number",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Charter School Number Format: text"
+              },
+              {
+                "name": "Charter Funding Type",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Charter Funding Type Format: text"
+              },
+              {
+                "name": "IRC",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: integer Known values: Not useful"
+              },
+              {
+                "name": "Low Grade",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Low Grade Format: text"
+              },
+              {
+                "name": "High Grade",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "High Grade Format: text"
+              },
+              {
+                "name": "Enrollment (K-12)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Enrollment (K-12) Format: real Known values: commonsense evidence:\n\nK-12: 1st grade - 12nd grade"
+              },
+              {
+                "name": "Free Meal Count (K-12)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Free Meal Count (K-12) Format: real Known values: commonsense evidence:\n\neligible free rate = Free Meal Count / Enrollment"
+              },
+              {
+                "name": "Percent (%) Eligible Free (K-12)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: real"
+              },
+              {
+                "name": "FRPM Count (K-12)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Free or Reduced Price Meal Count (K-12) Format: real Known values: commonsense evidence:\n\neligible FRPM rate = FRPM / Enrollment"
+              },
+              {
+                "name": "Percent (%) Eligible FRPM (K-12)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: real"
+              },
+              {
+                "name": "Enrollment (Ages 5-17)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Enrollment (Ages 5-17) Format: real"
+              },
+              {
+                "name": "Free Meal Count (Ages 5-17)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Free Meal Count (Ages 5-17) Format: real Known values: commonsense evidence:\n\neligible free rate = Free Meal Count / Enrollment"
+              },
+              {
+                "name": "Percent (%) Eligible Free (Ages 5-17)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: real"
+              },
+              {
+                "name": "FRPM Count (Ages 5-17)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: real"
+              },
+              {
+                "name": "Percent (%) Eligible FRPM (Ages 5-17)",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: real"
+              },
+              {
+                "name": "2013-14 CALPADS Fall 1 Certification Status",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "2013-14 CALPADS Fall 1 Certification Status Format: integer"
+              }
+            ],
+            "foreign_keys": [
+              {
+                "column_name": "CDSCode",
+                "referenced_table": "schools",
+                "referenced_column": "CDSCode"
+              }
+            ],
+            "description": null
+          },
+          {
+            "name": "satscores",
+            "source_type": "sqlite",
+            "columns": [
+              {
+                "name": "cds",
+                "data_type": "TEXT",
+                "primary_key": true,
+                "nullable": false,
+                "description": "California Department Schools Format: text"
+              },
+              {
+                "name": "rtype",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": false,
+                "description": "rtype Format: text Known values: unuseful"
+              },
+              {
+                "name": "sname",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "school name Format: text"
+              },
+              {
+                "name": "dname",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "district segment Format: text"
+              },
+              {
+                "name": "cname",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "county name Format: text"
+              },
+              {
+                "name": "enroll12",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": false,
+                "description": "enrollment (1st-12nd grade) Format: integer"
+              },
+              {
+                "name": "NumTstTakr",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": false,
+                "description": "Number of Test Takers in this school Format: integer Known values: number of test takers in each school"
+              },
+              {
+                "name": "AvgScrRead",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "average scores in Reading Format: integer Known values: average scores in Reading"
+              },
+              {
+                "name": "AvgScrMath",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "average scores in Math Format: integer Known values: average scores in Math"
+              },
+              {
+                "name": "AvgScrWrite",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "average scores in writing Format: integer Known values: average scores in writing"
+              },
+              {
+                "name": "NumGE1500",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Number of Test Takers Whose Total SAT Scores Are Greater or Equal to 1500 Format: integer Known values: Number of Test Takers Whose Total SAT Scores Are Greater or Equal to 1500\n\ncommonsense evidence:\n\nExcellence Rate = NumGE1500 / NumTstTakr"
+              }
+            ],
+            "foreign_keys": [
+              {
+                "column_name": "cds",
+                "referenced_table": "schools",
+                "referenced_column": "CDSCode"
+              }
+            ],
+            "description": null
+          },
+          {
+            "name": "schools",
+            "source_type": "sqlite",
+            "columns": [
+              {
+                "name": "CDSCode",
+                "data_type": "TEXT",
+                "primary_key": true,
+                "nullable": false,
+                "description": "CDSCode Format: text"
+              },
+              {
+                "name": "NCESDist",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "This field represents the 7-digit National Center for Educational Statistics (NCES) school district identification number. The first 2 digits identify the state and the last 5 digits identify the school district. Combined, they make a unique 7-digit ID for each school district. Format: text"
+              },
+              {
+                "name": "NCESSchool",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "This field represents the 5-digit NCES school identification number. The NCESSchool combined with the NCESDist form a unique 12-digit ID for each school. Format: text"
+              },
+              {
+                "name": "StatusType",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": false,
+                "description": "This field identifies the status of the district. Format: text Known values: Definitions of the valid status types are listed below:\n·       Active: The district is in operation and providing instructional services.\n·       Closed: The district is not in operation and no longer providing instructional services.\n·       Merged: The district has combined with another district or districts.\n·       Pending: The district has not opened for operation and instructional services yet, but plans to open within the next 9–12 months."
+              },
+              {
+                "name": "County",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": false,
+                "description": "County name Format: text"
+              },
+              {
+                "name": "District",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": false,
+                "description": "District Format: text"
+              },
+              {
+                "name": "School",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "School Format: text"
+              },
+              {
+                "name": "Street",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Street Format: text"
+              },
+              {
+                "name": "StreetAbr",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The abbreviated street address of the school, district, or administrative authority’s physical location. Format: text Known values: The abbreviated street address of the school, district, or administrative authority’s physical location. Note: Some records (primarily records of closed or retired schools) may not have data in this field."
+              },
+              {
+                "name": "City",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "City Format: text"
+              },
+              {
+                "name": "Zip",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Zip Format: text"
+              },
+              {
+                "name": "State",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "State Format: text"
+              },
+              {
+                "name": "MailStreet",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "MailStreet Format: text Known values: The unabbreviated mailing address of the school, district, or administrative authority. Note: 1) Some entities (primarily closed or retired schools) may not have data in this field; 2) Many active entities have not provided a mailing street address. For your convenience we have filled the unpopulated MailStreet cells with Street data."
+              },
+              {
+                "name": "MailStrAbr",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: the abbreviated mailing street address of the school, district, or administrative authority.Note: Many active entities have not provided a mailing street address. For your convenience we have filled the unpopulated MailStrAbr cells with StreetAbr data."
+              },
+              {
+                "name": "MailCity",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: The city associated with the mailing address of the school, district, or administrative authority. Note: Many entities have not provided a mailing address city. For your convenience we have filled the unpopulated MailCity cells with City data."
+              },
+              {
+                "name": "MailZip",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: The zip code associated with the mailing address of the school, district, or administrative authority. Note: Many entities have not provided a mailing address zip code. For your convenience we have filled the unpopulated MailZip cells with Zip data."
+              },
+              {
+                "name": "MailState",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: The state within the mailing address. For your convenience we have filled the unpopulated MailState cells with State data."
+              },
+              {
+                "name": "Phone",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Phone Format: text"
+              },
+              {
+                "name": "Ext",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The phone number extension of the school, district, or administrative authority. Format: text Known values: The phone number extension of the school, district, or administrative authority."
+              },
+              {
+                "name": "Website",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The website address of the school, district, or administrative authority. Format: text Known values: The website address of the school, district, or administrative authority."
+              },
+              {
+                "name": "OpenDate",
+                "data_type": "DATE",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The date the school opened. Format: date"
+              },
+              {
+                "name": "ClosedDate",
+                "data_type": "DATE",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The date the school closed. Format: date"
+              },
+              {
+                "name": "Charter",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "This field identifies a charter school. Format: integer Known values: The field is coded as follows:\n\n·       1 = The school is a charter\n\n·       0 = The school is not a charter"
+              },
+              {
+                "name": "CharterNum",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The charter school number, Format: text Known values: 4-digit number assigned to a charter school."
+              },
+              {
+                "name": "FundingType",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Indicates the charter school funding type Format: text Known values: Values are as follows:\n\n·       Not in CS (California School) funding model\n\n·       Locally funded\n\n·       Directly funded"
+              },
+              {
+                "name": "DOC",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": false,
+                "description": "District Ownership Code Format: text Known values: The District Ownership Code (DOC) is the numeric code used to identify the category of the Administrative Authority.\n•       00 - County Office of Education\n•       02 – State Board of Education\n•       03 – Statewide Benefit Charter\n•       31 – State Special Schools\n•       34 – Non-school Location*\n•       52 – Elementary School District\n•       54 – Unified School District\n•       56 – High School District\n•       98 – Regional Occupational Center/Program (ROC/P)\ncommonsense evidence:\n*Only the California Education Authority has been included in the non-school location category."
+              },
+              {
+                "name": "DOCType",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": false,
+                "description": "The District Ownership Code Type is the text description of the DOC category. Format: text Known values: (See text values in DOC field description above)"
+              },
+              {
+                "name": "SOC",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The School Ownership Code is a numeric code used to identify the type of school. Format: text Known values: •      08 - Preschool      \n•       09 – Special Education Schools (Public)\n•      11 – Youth Authority Facilities (CEA)\n•       13 – Opportunity Schools\n•       14 – Juvenile Court Schools\n•       15 – Other County or District Programs\n•       31 – State Special Schools\n•       60 – Elementary School (Public)\n•       61 – Elementary School in 1 School District (Public)\n•       62 – Intermediate/Middle Schools (Public)\n•       63 – Alternative Schools of Choice\n•       64 – Junior High Schools (Public)\n•       65 – K-12 Schools (Public)\n•       66 – High Schools (Public)\n•       67 – High Schools in 1 School District (Public)\n•       68 – Continuation High Schools\n•       69 – District Community Day Schools\n•       70 – Adult Education Centers\n•       98 – Regional Occupational Center/Program (ROC/P)"
+              },
+              {
+                "name": "SOCType",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The School Ownership Code Type is the text description of the type of school. Format: text Known values: The School Ownership Code Type is the text description of the type of school."
+              },
+              {
+                "name": "EdOpsCode",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The Education Option Code is a short text description of the type of education offered. Format: text Known values: •      ALTSOC – Alternative School of Choice\n•      COMM – County Community School\n•       COMMDAY – Community Day School\n•       CON – Continuation School\n•       JUV – Juvenile Court School\n•       OPP – Opportunity School\n•       YTH – Youth Authority School\n•       SSS – State Special School\n•       SPEC – Special Education School\n•       TRAD – Traditional\n•       ROP – Regional Occupational Program\n•       HOMHOS – Home and Hospital\n•       SPECON – District Consortia Special Education School"
+              },
+              {
+                "name": "EdOpsName",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Educational Option Name Format: text Known values: The Educational Option Name is the long text description of the type of education being offered."
+              },
+              {
+                "name": "EILCode",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The Educational Instruction Level Code is a short text description of the institution's type relative to the grade range served. Format: text Known values: •       A – Adult\n•       ELEM – Elementary\n•       ELEMHIGH – Elementary-High Combination\n•       HS – High School\n•       INTMIDJR – Intermediate/Middle/Junior High\n•       PS – Preschool\n•       UG – Ungraded"
+              },
+              {
+                "name": "EILName",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The Educational Instruction Level Name is the long text description of the institution’s type relative to the grade range served. Format: text Known values: The Educational Instruction Level Name is the long text description of the institution’s type relative to the grade range served."
+              },
+              {
+                "name": "GSoffered",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The grade span offered is the lowest grade and the highest grade offered or supported by the school, district, or administrative authority. This field might differ from the grade span served as reported in the most recent certified California Longitudinal Pupil Achievement (CALPADS) Fall 1 data collection. Format: text Known values: For example XYZ School might display the following data:\n\nGSoffered = P–Adult\n\nGSserved = K–12"
+              },
+              {
+                "name": "GSserved",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "It is the lowest grade and the highest grade of student enrollment as reported in the most recent certified CALPADS Fall 1 data collection. Only K–12 enrollment is reported through CALPADS. This field may differ from the grade span offered. Format: text Known values: commonsense evidence:\n\n1.     Only K–12 enrollment is reported through CALPADS\n\n2.     Note: Special programs at independent study, alternative education, and special education schools will often exceed the typical grade span for schools of that type"
+              },
+              {
+                "name": "Virtual",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "This field identifies the type of virtual instruction offered by the school. Virtual instruction is instruction in which students and teachers are separated by time and/or location, and interaction occurs via computers and/or telecommunications technologies. Format: text Known values: The field is coded as follows:\n\n·       F = Exclusively Virtual – The school has no physical building where students meet with each other or with teachers, all instruction is virtual.\n\n·       V = Primarily Virtual – The school focuses on a systematic program of virtual instruction but includes some physical meetings among students or with teachers.\n\n·       C = Primarily Classroom – The school offers virtual courses but virtual instruction is not the primary means of instruction.\n\n·       N = Not Virtual – The school does not offer any virtual instruction.\n\n·       P = Partial Virtual – The school offers some, but not all, instruction through virtual instruction. Note: This value was retired and replaced with the Primarily Virtual and Primarily Classroom values beginning with the 2016–17 school year."
+              },
+              {
+                "name": "Magnet",
+                "data_type": "INTEGER",
+                "primary_key": false,
+                "nullable": true,
+                "description": "This field identifies whether a school is a magnet school and/or provides a magnet program. Format: integer Known values: The field is coded as follows:\n\n·       1 = Magnet - The school is a magnet school and/or offers a magnet program.\n\n·       0 = Not Magnet - The school is not a magnet school and/or does not offer a magnet program.\n\ncommonsense evidence:\n\nNote: Preschools and adult education centers do not contain a magnet school indicator."
+              },
+              {
+                "name": "Latitude",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the equator measured north to south. Format: real Known values: The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the equator measured north to south."
+              },
+              {
+                "name": "Longitude",
+                "data_type": "REAL",
+                "primary_key": false,
+                "nullable": true,
+                "description": "The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the prime meridian (Greenwich, England) measured from west to east. Format: real Known values: The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the prime meridian (Greenwich, England) measured from west to east."
+              },
+              {
+                "name": "AdmFName1",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "administrator's first name Format: text Known values: The superintendent’s or principal’s first name.\n\ncommonsense evidence:\n\nOnly active and pending districts and schools will display administrator information, if applicable."
+              },
+              {
+                "name": "AdmLName1",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "administrator's last name Format: text Known values: The superintendent’s or principal’s last name.\n\ncommonsense evidence:\nOnly active and pending districts and schools will display administrator information, if applicable."
+              },
+              {
+                "name": "AdmEmail1",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "administrator's email address Format: text Known values: The superintendent’s or principal’s email address.\n\ncommonsense evidence:\n\nOnly active and pending districts and schools will display administrator information, if applicable."
+              },
+              {
+                "name": "AdmFName2",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: SAME as 1"
+              },
+              {
+                "name": "AdmLName2",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text"
+              },
+              {
+                "name": "AdmEmail2",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text"
+              },
+              {
+                "name": "AdmFName3",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: not useful"
+              },
+              {
+                "name": "AdmLName3",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: not useful"
+              },
+              {
+                "name": "AdmEmail3",
+                "data_type": "TEXT",
+                "primary_key": false,
+                "nullable": true,
+                "description": "Format: text Known values: not useful"
+              },
+              {
+                "name": "LastUpdate",
+                "data_type": "DATE",
+                "primary_key": false,
+                "nullable": false,
+                "description": "Format: date Known values: when is this record updated last time"
+              }
+            ],
+            "foreign_keys": [],
+            "description": null
+          }
+        ]
+      },
+      "data_source": "data\\benchmarks\\bird\\dev_databases\\california_schools\\california_schools.sqlite",
+      "trace": {
+        "trace_id": "aefc882f-8dc8-4857-a297-05af049526e0",
+        "started_at": "2026-09-16T13:48:27.514897Z",
+        "events": [
+          {
+            "event_type": "request",
+            "message": "User request received.",
+            "timestamp": "2026-09-16T13:48:27.514897Z",
+            "metadata": {
+              "user_request": "How many schools with an average score in Math greater than 400 in the SAT test are exclusively virtual?"
+            }
+          },
+          {
+            "event_type": "input_guardrail",
+            "message": "Input accepted.",
+            "timestamp": "2026-09-16T13:48:27.514897Z",
+            "metadata": {}
+          },
+          {
+            "event_type": "schema",
+            "message": "Retrieving data schema.",
+            "timestamp": "2026-09-16T13:48:27.514897Z",
+            "metadata": {
+              "source": "data\\benchmarks\\bird\\dev_databases\\california_schools\\california_schools.sqlite"
+            }
+          },
+          {
+            "event_type": "schema",
+            "message": "Data schema retrieved.",
+            "timestamp": "2026-09-16T13:48:27.519867Z",
+            "metadata": {
+              "schema": {
+                "source_type": "sqlite",
+                "tables": [
+                  {
+                    "name": "frpm",
+                    "source_type": "sqlite",
+                    "columns": [
+                      {
+                        "name": "CDSCode",
+                        "data_type": "TEXT",
+                        "primary_key": true,
+                        "nullable": false,
+                        "description": "CDSCode Format: integer"
+                      },
+                      {
+                        "name": "Academic Year",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Academic Year Format: integer"
+                      },
+                      {
+                        "name": "County Code",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "County Code Format: integer"
+                      },
+                      {
+                        "name": "District Code",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "District Code Format: integer"
+                      },
+                      {
+                        "name": "School Code",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "School Code Format: integer"
+                      },
+                      {
+                        "name": "County Name",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "County Code Format: text"
+                      },
+                      {
+                        "name": "District Name",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "District Name Format: text"
+                      },
+                      {
+                        "name": "School Name",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "School Name Format: text"
+                      },
+                      {
+                        "name": "District Type",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "District Type Format: text"
+                      },
+                      {
+                        "name": "School Type",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "School Type Format: text"
+                      },
+                      {
+                        "name": "Educational Option Type",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Educational Option Type Format: text"
+                      },
+                      {
+                        "name": "NSLP Provision Status",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "NSLP Provision Status Format: text"
+                      },
+                      {
+                        "name": "Charter School (Y/N)",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Charter School (Y/N) Format: integer Known values: 0: N;\n1: Y"
+                      },
+                      {
+                        "name": "Charter School Number",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Charter School Number Format: text"
+                      },
+                      {
+                        "name": "Charter Funding Type",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Charter Funding Type Format: text"
+                      },
+                      {
+                        "name": "IRC",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: integer Known values: Not useful"
+                      },
+                      {
+                        "name": "Low Grade",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Low Grade Format: text"
+                      },
+                      {
+                        "name": "High Grade",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "High Grade Format: text"
+                      },
+                      {
+                        "name": "Enrollment (K-12)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Enrollment (K-12) Format: real Known values: commonsense evidence:\n\nK-12: 1st grade - 12nd grade"
+                      },
+                      {
+                        "name": "Free Meal Count (K-12)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Free Meal Count (K-12) Format: real Known values: commonsense evidence:\n\neligible free rate = Free Meal Count / Enrollment"
+                      },
+                      {
+                        "name": "Percent (%) Eligible Free (K-12)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: real"
+                      },
+                      {
+                        "name": "FRPM Count (K-12)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Free or Reduced Price Meal Count (K-12) Format: real Known values: commonsense evidence:\n\neligible FRPM rate = FRPM / Enrollment"
+                      },
+                      {
+                        "name": "Percent (%) Eligible FRPM (K-12)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: real"
+                      },
+                      {
+                        "name": "Enrollment (Ages 5-17)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Enrollment (Ages 5-17) Format: real"
+                      },
+                      {
+                        "name": "Free Meal Count (Ages 5-17)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Free Meal Count (Ages 5-17) Format: real Known values: commonsense evidence:\n\neligible free rate = Free Meal Count / Enrollment"
+                      },
+                      {
+                        "name": "Percent (%) Eligible Free (Ages 5-17)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: real"
+                      },
+                      {
+                        "name": "FRPM Count (Ages 5-17)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: real"
+                      },
+                      {
+                        "name": "Percent (%) Eligible FRPM (Ages 5-17)",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: real"
+                      },
+                      {
+                        "name": "2013-14 CALPADS Fall 1 Certification Status",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "2013-14 CALPADS Fall 1 Certification Status Format: integer"
+                      }
+                    ],
+                    "foreign_keys": [
+                      {
+                        "column_name": "CDSCode",
+                        "referenced_table": "schools",
+                        "referenced_column": "CDSCode"
+                      }
+                    ],
+                    "description": null
+                  },
+                  {
+                    "name": "satscores",
+                    "source_type": "sqlite",
+                    "columns": [
+                      {
+                        "name": "cds",
+                        "data_type": "TEXT",
+                        "primary_key": true,
+                        "nullable": false,
+                        "description": "California Department Schools Format: text"
+                      },
+                      {
+                        "name": "rtype",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "rtype Format: text Known values: unuseful"
+                      },
+                      {
+                        "name": "sname",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "school name Format: text"
+                      },
+                      {
+                        "name": "dname",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "district segment Format: text"
+                      },
+                      {
+                        "name": "cname",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "county name Format: text"
+                      },
+                      {
+                        "name": "enroll12",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "enrollment (1st-12nd grade) Format: integer"
+                      },
+                      {
+                        "name": "NumTstTakr",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "Number of Test Takers in this school Format: integer Known values: number of test takers in each school"
+                      },
+                      {
+                        "name": "AvgScrRead",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "average scores in Reading Format: integer Known values: average scores in Reading"
+                      },
+                      {
+                        "name": "AvgScrMath",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "average scores in Math Format: integer Known values: average scores in Math"
+                      },
+                      {
+                        "name": "AvgScrWrite",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "average scores in writing Format: integer Known values: average scores in writing"
+                      },
+                      {
+                        "name": "NumGE1500",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Number of Test Takers Whose Total SAT Scores Are Greater or Equal to 1500 Format: integer Known values: Number of Test Takers Whose Total SAT Scores Are Greater or Equal to 1500\n\ncommonsense evidence:\n\nExcellence Rate = NumGE1500 / NumTstTakr"
+                      }
+                    ],
+                    "foreign_keys": [
+                      {
+                        "column_name": "cds",
+                        "referenced_table": "schools",
+                        "referenced_column": "CDSCode"
+                      }
+                    ],
+                    "description": null
+                  },
+                  {
+                    "name": "schools",
+                    "source_type": "sqlite",
+                    "columns": [
+                      {
+                        "name": "CDSCode",
+                        "data_type": "TEXT",
+                        "primary_key": true,
+                        "nullable": false,
+                        "description": "CDSCode Format: text"
+                      },
+                      {
+                        "name": "NCESDist",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "This field represents the 7-digit National Center for Educational Statistics (NCES) school district identification number. The first 2 digits identify the state and the last 5 digits identify the school district. Combined, they make a unique 7-digit ID for each school district. Format: text"
+                      },
+                      {
+                        "name": "NCESSchool",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "This field represents the 5-digit NCES school identification number. The NCESSchool combined with the NCESDist form a unique 12-digit ID for each school. Format: text"
+                      },
+                      {
+                        "name": "StatusType",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "This field identifies the status of the district. Format: text Known values: Definitions of the valid status types are listed below:\n·       Active: The district is in operation and providing instructional services.\n·       Closed: The district is not in operation and no longer providing instructional services.\n·       Merged: The district has combined with another district or districts.\n·       Pending: The district has not opened for operation and instructional services yet, but plans to open within the next 9–12 months."
+                      },
+                      {
+                        "name": "County",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "County name Format: text"
+                      },
+                      {
+                        "name": "District",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "District Format: text"
+                      },
+                      {
+                        "name": "School",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "School Format: text"
+                      },
+                      {
+                        "name": "Street",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Street Format: text"
+                      },
+                      {
+                        "name": "StreetAbr",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The abbreviated street address of the school, district, or administrative authority’s physical location. Format: text Known values: The abbreviated street address of the school, district, or administrative authority’s physical location. Note: Some records (primarily records of closed or retired schools) may not have data in this field."
+                      },
+                      {
+                        "name": "City",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "City Format: text"
+                      },
+                      {
+                        "name": "Zip",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Zip Format: text"
+                      },
+                      {
+                        "name": "State",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "State Format: text"
+                      },
+                      {
+                        "name": "MailStreet",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "MailStreet Format: text Known values: The unabbreviated mailing address of the school, district, or administrative authority. Note: 1) Some entities (primarily closed or retired schools) may not have data in this field; 2) Many active entities have not provided a mailing street address. For your convenience we have filled the unpopulated MailStreet cells with Street data."
+                      },
+                      {
+                        "name": "MailStrAbr",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: the abbreviated mailing street address of the school, district, or administrative authority.Note: Many active entities have not provided a mailing street address. For your convenience we have filled the unpopulated MailStrAbr cells with StreetAbr data."
+                      },
+                      {
+                        "name": "MailCity",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: The city associated with the mailing address of the school, district, or administrative authority. Note: Many entities have not provided a mailing address city. For your convenience we have filled the unpopulated MailCity cells with City data."
+                      },
+                      {
+                        "name": "MailZip",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: The zip code associated with the mailing address of the school, district, or administrative authority. Note: Many entities have not provided a mailing address zip code. For your convenience we have filled the unpopulated MailZip cells with Zip data."
+                      },
+                      {
+                        "name": "MailState",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: The state within the mailing address. For your convenience we have filled the unpopulated MailState cells with State data."
+                      },
+                      {
+                        "name": "Phone",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Phone Format: text"
+                      },
+                      {
+                        "name": "Ext",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The phone number extension of the school, district, or administrative authority. Format: text Known values: The phone number extension of the school, district, or administrative authority."
+                      },
+                      {
+                        "name": "Website",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The website address of the school, district, or administrative authority. Format: text Known values: The website address of the school, district, or administrative authority."
+                      },
+                      {
+                        "name": "OpenDate",
+                        "data_type": "DATE",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The date the school opened. Format: date"
+                      },
+                      {
+                        "name": "ClosedDate",
+                        "data_type": "DATE",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The date the school closed. Format: date"
+                      },
+                      {
+                        "name": "Charter",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "This field identifies a charter school. Format: integer Known values: The field is coded as follows:\n\n·       1 = The school is a charter\n\n·       0 = The school is not a charter"
+                      },
+                      {
+                        "name": "CharterNum",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The charter school number, Format: text Known values: 4-digit number assigned to a charter school."
+                      },
+                      {
+                        "name": "FundingType",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Indicates the charter school funding type Format: text Known values: Values are as follows:\n\n·       Not in CS (California School) funding model\n\n·       Locally funded\n\n·       Directly funded"
+                      },
+                      {
+                        "name": "DOC",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "District Ownership Code Format: text Known values: The District Ownership Code (DOC) is the numeric code used to identify the category of the Administrative Authority.\n•       00 - County Office of Education\n•       02 – State Board of Education\n•       03 – Statewide Benefit Charter\n•       31 – State Special Schools\n•       34 – Non-school Location*\n•       52 – Elementary School District\n•       54 – Unified School District\n•       56 – High School District\n•       98 – Regional Occupational Center/Program (ROC/P)\ncommonsense evidence:\n*Only the California Education Authority has been included in the non-school location category."
+                      },
+                      {
+                        "name": "DOCType",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "The District Ownership Code Type is the text description of the DOC category. Format: text Known values: (See text values in DOC field description above)"
+                      },
+                      {
+                        "name": "SOC",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The School Ownership Code is a numeric code used to identify the type of school. Format: text Known values: •      08 - Preschool      \n•       09 – Special Education Schools (Public)\n•      11 – Youth Authority Facilities (CEA)\n•       13 – Opportunity Schools\n•       14 – Juvenile Court Schools\n•       15 – Other County or District Programs\n•       31 – State Special Schools\n•       60 – Elementary School (Public)\n•       61 – Elementary School in 1 School District (Public)\n•       62 – Intermediate/Middle Schools (Public)\n•       63 – Alternative Schools of Choice\n•       64 – Junior High Schools (Public)\n•       65 – K-12 Schools (Public)\n•       66 – High Schools (Public)\n•       67 – High Schools in 1 School District (Public)\n•       68 – Continuation High Schools\n•       69 – District Community Day Schools\n•       70 – Adult Education Centers\n•       98 – Regional Occupational Center/Program (ROC/P)"
+                      },
+                      {
+                        "name": "SOCType",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The School Ownership Code Type is the text description of the type of school. Format: text Known values: The School Ownership Code Type is the text description of the type of school."
+                      },
+                      {
+                        "name": "EdOpsCode",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The Education Option Code is a short text description of the type of education offered. Format: text Known values: •      ALTSOC – Alternative School of Choice\n•      COMM – County Community School\n•       COMMDAY – Community Day School\n•       CON – Continuation School\n•       JUV – Juvenile Court School\n•       OPP – Opportunity School\n•       YTH – Youth Authority School\n•       SSS – State Special School\n•       SPEC – Special Education School\n•       TRAD – Traditional\n•       ROP – Regional Occupational Program\n•       HOMHOS – Home and Hospital\n•       SPECON – District Consortia Special Education School"
+                      },
+                      {
+                        "name": "EdOpsName",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Educational Option Name Format: text Known values: The Educational Option Name is the long text description of the type of education being offered."
+                      },
+                      {
+                        "name": "EILCode",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The Educational Instruction Level Code is a short text description of the institution's type relative to the grade range served. Format: text Known values: •       A – Adult\n•       ELEM – Elementary\n•       ELEMHIGH – Elementary-High Combination\n•       HS – High School\n•       INTMIDJR – Intermediate/Middle/Junior High\n•       PS – Preschool\n•       UG – Ungraded"
+                      },
+                      {
+                        "name": "EILName",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The Educational Instruction Level Name is the long text description of the institution’s type relative to the grade range served. Format: text Known values: The Educational Instruction Level Name is the long text description of the institution’s type relative to the grade range served."
+                      },
+                      {
+                        "name": "GSoffered",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The grade span offered is the lowest grade and the highest grade offered or supported by the school, district, or administrative authority. This field might differ from the grade span served as reported in the most recent certified California Longitudinal Pupil Achievement (CALPADS) Fall 1 data collection. Format: text Known values: For example XYZ School might display the following data:\n\nGSoffered = P–Adult\n\nGSserved = K–12"
+                      },
+                      {
+                        "name": "GSserved",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "It is the lowest grade and the highest grade of student enrollment as reported in the most recent certified CALPADS Fall 1 data collection. Only K–12 enrollment is reported through CALPADS. This field may differ from the grade span offered. Format: text Known values: commonsense evidence:\n\n1.     Only K–12 enrollment is reported through CALPADS\n\n2.     Note: Special programs at independent study, alternative education, and special education schools will often exceed the typical grade span for schools of that type"
+                      },
+                      {
+                        "name": "Virtual",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "This field identifies the type of virtual instruction offered by the school. Virtual instruction is instruction in which students and teachers are separated by time and/or location, and interaction occurs via computers and/or telecommunications technologies. Format: text Known values: The field is coded as follows:\n\n·       F = Exclusively Virtual – The school has no physical building where students meet with each other or with teachers, all instruction is virtual.\n\n·       V = Primarily Virtual – The school focuses on a systematic program of virtual instruction but includes some physical meetings among students or with teachers.\n\n·       C = Primarily Classroom – The school offers virtual courses but virtual instruction is not the primary means of instruction.\n\n·       N = Not Virtual – The school does not offer any virtual instruction.\n\n·       P = Partial Virtual – The school offers some, but not all, instruction through virtual instruction. Note: This value was retired and replaced with the Primarily Virtual and Primarily Classroom values beginning with the 2016–17 school year."
+                      },
+                      {
+                        "name": "Magnet",
+                        "data_type": "INTEGER",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "This field identifies whether a school is a magnet school and/or provides a magnet program. Format: integer Known values: The field is coded as follows:\n\n·       1 = Magnet - The school is a magnet school and/or offers a magnet program.\n\n·       0 = Not Magnet - The school is not a magnet school and/or does not offer a magnet program.\n\ncommonsense evidence:\n\nNote: Preschools and adult education centers do not contain a magnet school indicator."
+                      },
+                      {
+                        "name": "Latitude",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the equator measured north to south. Format: real Known values: The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the equator measured north to south."
+                      },
+                      {
+                        "name": "Longitude",
+                        "data_type": "REAL",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the prime meridian (Greenwich, England) measured from west to east. Format: real Known values: The angular distance (expressed in degrees) between the location of the school, district, or administrative authority and the prime meridian (Greenwich, England) measured from west to east."
+                      },
+                      {
+                        "name": "AdmFName1",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "administrator's first name Format: text Known values: The superintendent’s or principal’s first name.\n\ncommonsense evidence:\n\nOnly active and pending districts and schools will display administrator information, if applicable."
+                      },
+                      {
+                        "name": "AdmLName1",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "administrator's last name Format: text Known values: The superintendent’s or principal’s last name.\n\ncommonsense evidence:\nOnly active and pending districts and schools will display administrator information, if applicable."
+                      },
+                      {
+                        "name": "AdmEmail1",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "administrator's email address Format: text Known values: The superintendent’s or principal’s email address.\n\ncommonsense evidence:\n\nOnly active and pending districts and schools will display administrator information, if applicable."
+                      },
+                      {
+                        "name": "AdmFName2",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: SAME as 1"
+                      },
+                      {
+                        "name": "AdmLName2",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text"
+                      },
+                      {
+                        "name": "AdmEmail2",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text"
+                      },
+                      {
+                        "name": "AdmFName3",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: not useful"
+                      },
+                      {
+                        "name": "AdmLName3",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: not useful"
+                      },
+                      {
+                        "name": "AdmEmail3",
+                        "data_type": "TEXT",
+                        "primary_key": false,
+                        "nullable": true,
+                        "description": "Format: text Known values: not useful"
+                      },
+                      {
+                        "name": "LastUpdate",
+                        "data_type": "DATE",
+                        "primary_key": false,
+                        "nullable": false,
+                        "description": "Format: date Known values: when is this record updated last time"
+                      }
+                    ],
+                    "foreign_keys": [],
+                    "description": null
+                  }
+                ]
+              },
+              "schema_size": 89,
+              "source_type": "sqlite"
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Model routed for Business Analyst.",
+            "timestamp": "2026-09-16T13:48:27.519867Z",
+            "metadata": {
+              "tier": "fast",
+              "reason": "The request has relatively low analytical complexity.",
+              "complexity_score": 26
+            }
+          },
+          {
+            "event_type": "agent",
+            "message": "Business Analyst started.",
+            "timestamp": "2026-09-16T13:48:27.519867Z",
+            "metadata": {
+              "agent": "Business Analyst"
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Business Analyst model execution completed.",
+            "timestamp": "2026-09-16T13:48:40.811117Z",
+            "metadata": {
+              "primary_tier": "fast",
+              "attempts": [
+                {
+                  "tier": "fast",
+                  "model": "dots-studio/dots-3-note-preview:free",
+                  "attempt": 1,
+                  "success": true,
+                  "error_type": null
+                }
+              ]
+            }
+          },
+          {
+            "event_type": "agent",
+            "message": "Business Analyst completed.",
+            "timestamp": "2026-09-16T13:48:40.811117Z",
+            "metadata": {
+              "agent": "Business Analyst",
+              "plan": {
+                "analytical_objective": "Count schools with an average SAT Math score greater than 400 that are exclusively virtual",
+                "operation": "count",
+                "metric_definition": null,
+                "output_fields": [],
+                "metrics": [
+                  "school count"
+                ],
+                "dimensions": [],
+                "filters": [
+                  "AvgScrMath > 400",
+                  "Virtual = 'F'"
+                ],
+                "metric_conditions": [],
+                "numerator": null,
+                "denominator": null,
+                "time_range": null,
+                "comparison": null,
+                "analytical_question": "How many schools with an average score in Math greater than 400 in the SAT test are exclusively virtual?"
+              }
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Model routed for SQL generation.",
+            "timestamp": "2026-09-16T13:48:40.814064Z",
+            "metadata": {
+              "tier": "fast",
+              "reason": "The request has relatively low analytical complexity.",
+              "complexity_score": 32
+            }
+          },
+          {
+            "event_type": "sql",
+            "message": "Generating SQL.",
+            "timestamp": "2026-09-16T13:48:40.814064Z",
+            "metadata": {
+              "attempt": 1,
+              "feedback": null
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "SQL generation model execution completed.",
+            "timestamp": "2026-09-16T13:48:55.970341Z",
+            "metadata": {
+              "primary_tier": "fast",
+              "attempts": [
+                {
+                  "tier": "fast",
+                  "model": "dots-studio/dots-3-note-preview:free",
+                  "attempt": 1,
+                  "success": true,
+                  "error_type": null
+                }
+              ]
+            }
+          },
+          {
+            "event_type": "sql",
+            "message": "SQL generated.",
+            "timestamp": "2026-09-16T13:48:55.970341Z",
+            "metadata": {
+              "query": "SELECT COUNT(*)\nFROM satscores\nJOIN schools ON satscores.cds = schools.CDSCode\nWHERE AvgScrMath > 400\n  AND Virtual = 'F'",
+              "attempt": 1
+            }
+          },
+          {
+            "event_type": "sql",
+            "message": "SQL validation passed.",
+            "timestamp": "2026-09-16T13:48:55.970341Z",
+            "metadata": {
+              "attempt": 1
+            }
+          },
+          {
+            "event_type": "sql",
+            "message": "SQL execution completed.",
+            "timestamp": "2026-09-16T13:48:56.067672Z",
+            "metadata": {
+              "row_count": 1,
+              "columns": [
+                "COUNT(*)"
+              ]
+            }
+          },
+          {
+            "event_type": "sql",
+            "message": "SQL result validation passed.",
+            "timestamp": "2026-09-16T13:48:56.067672Z",
+            "metadata": {
+              "columns": [
+                "COUNT(*)"
+              ],
+              "attempt": 1
+            }
+          },
+          {
+            "event_type": "analysis",
+            "message": "Analytical result processing started.",
+            "timestamp": "2026-09-16T13:48:56.067672Z",
+            "metadata": {}
+          },
+          {
+            "event_type": "analysis",
+            "message": "Analytical result processing completed.",
+            "timestamp": "2026-09-16T13:48:56.067672Z",
+            "metadata": {
+              "analysis": {
+                "summary": {
+                  "row_count": 1,
+                  "columns": [
+                    "COUNT(*)"
+                  ]
+                },
+                "comparison": null,
+                "trend": null,
+                "anomaly": null
+              }
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Model routed for Insight Verification.",
+            "timestamp": "2026-09-16T13:48:56.067672Z",
+            "metadata": {
+              "tier": "fast",
+              "reason": "The request has relatively low analytical complexity.",
+              "complexity_score": 31
+            }
+          },
+          {
+            "event_type": "evidence",
+            "message": "Insight verification started.",
+            "timestamp": "2026-09-16T13:48:56.067672Z",
+            "metadata": {
+              "agent": "Insight and Evidence Verification",
+              "attempt": 1
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Insight Verification model execution completed.",
+            "timestamp": "2026-09-16T13:49:03.957923Z",
+            "metadata": {
+              "primary_tier": "fast",
+              "attempts": [
+                {
+                  "tier": "fast",
+                  "model": "dots-studio/dots-3-note-preview:free",
+                  "attempt": 1,
+                  "success": true,
+                  "error_type": null
+                }
+              ]
+            }
+          },
+          {
+            "event_type": "evidence",
+            "message": "Insight verification completed.",
+            "timestamp": "2026-09-16T13:49:03.964681Z",
+            "metadata": {
+              "insight_analysis": {
+                "insights": [
+                  {
+                    "statement": "The number of schools with an average SAT Math score greater than 400 that are exclusively virtual is 4.",
+                    "evidence": [
+                      {
+                        "claim": "The count of schools with an average SAT Math score greater than 400 that are exclusively virtual is 4.",
+                        "supporting_data": "The SQL result shows a COUNT(*) of 4 under the specified filters (AvgScrMath > 400 and Virtual = 'F').",
+                        "is_supported": true
+                      }
+                    ],
+                    "confidence": "high"
+                  }
+                ],
+                "unsupported_claims": [
+                  "The number of schools with an average SAT Math score greater than 400 that are exclusively virtual is 4."
+                ],
+                "verification_status": "partially_verified"
+              },
+              "attempt": 1
+            }
+          },
+          {
+            "event_type": "visualization",
+            "message": "Visualization workflow started.",
+            "timestamp": "2026-09-16T13:49:03.964681Z",
+            "metadata": {}
+          },
+          {
+            "event_type": "visualization",
+            "message": "Visualization workflow completed.",
+            "timestamp": "2026-09-16T13:49:03.964681Z",
+            "metadata": {
+              "visualization": {
+                "status": "not_visualizable",
+                "spec": null
+              }
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Model routed for Data Storytelling.",
+            "timestamp": "2026-09-16T13:49:03.964681Z",
+            "metadata": {
+              "tier": "fast",
+              "reason": "The request has relatively low analytical complexity.",
+              "complexity_score": 31
+            }
+          },
+          {
+            "event_type": "story",
+            "message": "Data Storyteller started.",
+            "timestamp": "2026-09-16T13:49:03.964681Z",
+            "metadata": {
+              "agent": "Data Storyteller",
+              "attempt": 1
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Data Storyteller model execution completed.",
+            "timestamp": "2026-09-16T13:49:22.086265Z",
+            "metadata": {
+              "primary_tier": "fast",
+              "attempts": [
+                {
+                  "tier": "fast",
+                  "model": "dots-studio/dots-3-note-preview:free",
+                  "attempt": 1,
+                  "success": true,
+                  "error_type": null
+                }
+              ]
+            }
+          },
+          {
+            "event_type": "error",
+            "message": "Data Storyteller output failed factual validation.",
+            "timestamp": "2026-09-16T13:49:22.086265Z",
+            "metadata": {
+              "attempt": 1,
+              "reason": "Story contains unsupported numerical value: 400."
+            }
+          },
+          {
+            "event_type": "story",
+            "message": "Data Storyteller started.",
+            "timestamp": "2026-09-16T13:49:22.086265Z",
+            "metadata": {
+              "agent": "Data Storyteller",
+              "attempt": 2
+            }
+          },
+          {
+            "event_type": "routing",
+            "message": "Data Storyteller model execution completed.",
+            "timestamp": "2026-09-16T13:49:52.185145Z",
+            "metadata": {
+              "primary_tier": "fast",
+              "attempts": [
+                {
+                  "tier": "fast",
+                  "model": "dots-studio/dots-3-note-preview:free",
+                  "attempt": 1,
+                  "success": true,
+                  "error_type": null
+                }
+              ]
+            }
+          },
+          {
+            "event_type": "story",
+            "message": "Data Storyteller completed.",
+            "timestamp": "2026-09-16T13:49:52.185145Z",
+            "metadata": {
+              "story": {
+                "summary": "There are 4 exclusively virtual schools with an average SAT Math score above the specified threshold.",
+                "sections": [
+                  {
+                    "heading": "Key Finding",
+                    "content": "The count of schools that are exclusively virtual and have an average SAT Math score exceeding the required level is 4."
+                  },
+                  {
+                    "heading": "Result Details",
+                    "content": "The SQL query returned a single count of 4 after filtering for schools with an average Math score above the benchmark and that are virtual only."
+                  }
+                ],
+                "visualization_explanation": "No visualization was generated because the returned analytical result was not suitable for a meaningful visualization.",
+                "recommendations": []
+              },
+              "attempt": 2
+            }
+          },
+          {
+            "event_type": "output",
+            "message": "TalkToTableau workflow completed.",
+            "timestamp": "2026-09-16T13:49:52.185145Z",
+            "metadata": {
+              "status": "completed",
+              "session_id": "d4764fc4-a4e9-49f5-93a4-f82622108e00"
+            }
+          }
+        ],
+        "completed": true
+      }
     },
     {
       "question_id": 46,
@@ -85,12 +1893,12 @@
       "story": null,
       "session_id": null,
       "trace_id": null,
-      "error_type": null,
-      "error": null,
-      "elapsed_seconds": null,
-      "status": "NOT_STARTED",
-      "started_at": null,
-      "completed_at": null
+      "error_type": "WORKFLOW",
+      "error": "RuntimeError: Agent 3 failed after 2 attempt(s).Factual validation failed: Story contains unsupported numerical value: 12.",
+      "elapsed_seconds": 120.65,
+      "status": "PIPELINE_FAIL",
+      "started_at": "2026-09-16T13:49:52.269242+00:00",
+      "completed_at": "2026-09-16T13:51:52.921327+00:00"
     },
     {
       "question_id": 37,
@@ -113,12 +1921,12 @@
       "story": null,
       "session_id": null,
       "trace_id": null,
-      "error_type": null,
-      "error": null,
-      "elapsed_seconds": null,
-      "status": "NOT_STARTED",
-      "started_at": null,
-      "completed_at": null
+      "error_type": "WORKFLOW",
+      "error": "ModelBehaviorError: Invalid JSON when parsing model output",
+      "elapsed_seconds": 95.632,
+      "status": "PIPELINE_FAIL",
+      "started_at": "2026-09-16T13:51:52.940484+00:00",
+      "completed_at": "2026-09-16T13:53:28.570906+00:00"
     },
     {
       "question_id": 32,
@@ -141,12 +1949,12 @@
       "story": null,
       "session_id": null,
       "trace_id": null,
-      "error_type": null,
-      "error": null,
-      "elapsed_seconds": null,
-      "status": "NOT_STARTED",
-      "started_at": null,
-      "completed_at": null
+      "error_type": "WORKFLOW",
+      "error": "RuntimeError: Agent 3 failed after 2 attempt(s).Factual validation failed: Story contains unsupported numerical value: 0.89582.",
+      "elapsed_seconds": 212.925,
+      "status": "PIPELINE_FAIL",
+      "started_at": "2026-09-16T13:53:28.588374+00:00",
+      "completed_at": "2026-09-16T13:57:01.505221+00:00"
     },
     {
       "question_id": 25,
@@ -1411,29 +3219,30 @@
   ],
   "summary": {
     "total_questions": 50,
-    "completed_questions": 1,
-    "workflow_success": 0,
-    "sql_generated": 0,
-    "sql_executed": 0,
-    "gold_sql_executed": 0,
-    "correct_results": 0,
-    "result_accuracy_percent": 0.0,
-    "evaluable_questions": 0,
-    "evaluable_correct_results": 0,
-    "evaluable_accuracy_percent": 0.0,
-    "provider_quota_exhausted": 1,
-    "average_question_time_seconds": 2.296,
+    "completed_questions": 5,
+    "workflow_success": 1,
+    "sql_generated": 1,
+    "sql_executed": 1,
+    "gold_sql_executed": 1,
+    "correct_results": 1,
+    "result_accuracy_percent": 2.0,
+    "evaluable_questions": 5,
+    "evaluable_correct_results": 1,
+    "evaluable_accuracy_percent": 20.0,
+    "provider_quota_exhausted": 0,
+    "average_question_time_seconds": 128.046,
     "status_counts": {
-      "PROVIDER_QUOTA_EXHAUSTED": 1,
-      "NOT_STARTED": 49
+      "PIPELINE_FAIL": 4,
+      "PASS": 1,
+      "NOT_STARTED": 45
     },
     "difficulty": {
       "simple": {
         "total": 18,
-        "correct": 0,
-        "provider_quota_exhausted": 1,
-        "evaluable": 17,
-        "accuracy_percent": 0.0
+        "correct": 1,
+        "provider_quota_exhausted": 0,
+        "evaluable": 18,
+        "accuracy_percent": 5.56
       },
       "moderate": {
         "total": 26,
@@ -1451,5 +3260,5 @@
       }
     }
   },
-  "total_elapsed_seconds": 2.304
+  "total_elapsed_seconds": 640.312
 }
