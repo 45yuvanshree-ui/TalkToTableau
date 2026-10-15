@@ -1,3 +1,4 @@
+
 """
 Deterministic analytical complexity extraction for adaptive routing.
 
@@ -79,6 +80,7 @@ class AnalyticalComplexityAnalyzer:
         r"\bchange\b",
         r"\bdifference\b",
         r"\bvariance\b",
+        r"\brank(?:ing|ed)?\b",
     )
 
     _CONDITIONAL_PATTERNS = (
@@ -181,6 +183,7 @@ class AnalyticalComplexityAnalyzer:
         r"\bcontributing\b",
         r"\bstrongest\b",
         r"\bweakest\b",
+        r"\brank(?:ing|ed)?\b",
     )
 
     _OUTPUT_PATTERNS = (
@@ -205,7 +208,6 @@ class AnalyticalComplexityAnalyzer:
         """
         Convert a natural-language request into a RoutingRequest.
         """
-
         text = cls._normalize(user_request)
 
         aggregation = cls._count_matches(
@@ -338,7 +340,6 @@ class AnalyticalComplexityAnalyzer:
 
         Complexity reflects analytical operations rather than question length.
         """
-
         complexity = 1
 
         if aggregation:
@@ -380,7 +381,6 @@ class AnalyticalComplexityAnalyzer:
         Explicit analytical wording is treated as less ambiguous.
         Short, vague requests receive a higher ambiguity score.
         """
-
         if len(text.split()) <= 3:
             return 2
 
@@ -407,15 +407,11 @@ class AnalyticalComplexityAnalyzer:
         """
         Mark requests requiring interpretation or multi-step reasoning.
 
-        Derived metrics compared against a benchmark are treated as
-        reasoning-intensive because they typically require multiple
-        analytical steps, such as:
-            1. calculate the derived metric,
-            2. calculate the benchmark,
-            3. compare the two,
-            4. filter or rank the resulting entities.
+        Derived metrics compared against a benchmark are reasoning-intensive
+        because they typically require calculating the metric, calculating
+        the benchmark, comparing the results, and potentially filtering or
+        ranking the resulting entities.
         """
-
         if reasoning:
             return True
 
@@ -488,7 +484,6 @@ def infer_routing_request(
     """
     Convenience wrapper used by orchestration.
     """
-
     return AnalyticalComplexityAnalyzer.analyze(
         user_request=user_request,
         schema_size=schema_size,

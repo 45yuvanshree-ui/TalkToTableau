@@ -116,3 +116,16 @@ def test_routing_does_not_depend_on_word_count():
 
     assert short_decision.complexity_score != len("Revenue?")
     assert long_decision.complexity_score != len(long.user_request)
+
+
+def test_seller_average_comparison_and_state_ranking_require_reasoning():
+    question = (
+        "Which sellers have total item sales above the average seller total, "
+        "and how do they rank by total item sales within their state?"
+    )
+
+    request = infer_routing_request(question, schema_size=9)
+    decision = AdaptiveRouter().route(request)
+
+    assert request.reasoning_required is True
+    assert decision.tier == ModelTier.REASONING
