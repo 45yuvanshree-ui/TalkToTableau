@@ -365,7 +365,16 @@ def _load_dataset_preview(file_path: str | None):
 
     try:
         if extension == ".csv":
-            dataframe = pd.read_csv(path)
+            try:
+                dataframe = pd.read_csv(
+                    path,
+                    encoding="utf-8",
+                )
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(
+                    path,
+                    encoding="cp1252",
+                )
         else:
             dataframe = pd.read_excel(path)
 

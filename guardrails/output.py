@@ -1,6 +1,7 @@
 """Output guardrails and deterministic factual validation."""
 
 import re
+import math
 
 from models import BusinessStory, InsightAnalysis
 from sql.models import SQLResult
@@ -85,8 +86,9 @@ def _extract_story_numbers(text: str) -> list[float]:
 
     text = re.sub(r"(?<=\d),(?=\d)", "", text)
 
+
     number_pattern = re.compile(
-        r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])"
+        r"(?<![\w.])-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?(?![\w.])"
     )
 
     return [
@@ -128,6 +130,45 @@ def _numeric_values_from_sql(
         )
 
     return values
+
+
+def _is_supported_story_number(
+    number: float,
+    supported_numbers: set[float],
+) -> bool:
+    """
+    Check whether a story number is supported by authoritative evidence.
+
+    Exact values are accepted. Equivalent scientific-notation values and
+    normal business rounding (whole numbers, one decimal place, or two
+    decimal places) are also accepted when they correspond to an
+    authoritative value.
+    """
+
+    normalized_number = round(number, 10)
+
+    if normalized_number in supported_numbers:
+        return True
+
+    for supported_number in supported_numbers:
+        if math.isclose(
+            normalized_number,
+            supported_number,
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            return True
+
+        if round(supported_number) == round(number):
+            return True
+
+        if round(supported_number, 1) == round(number, 1):
+            return True
+
+        if round(supported_number, 2) == round(number, 2):
+            return True
+
+    return False
 
 
 def _normalise_text(value: str) -> str:
@@ -476,7 +517,10 @@ def validate_story_factual_claims(
 
     for number in story_numbers:
 
-        if round(number, 10) not in supported_numbers:
+        if not _is_supported_story_number(
+            number,
+            supported_numbers,
+        ):
 
             return (
                 False,

@@ -2483,6 +2483,7 @@ Return ONLY the structured BusinessStory.
                 ) = validate_story_factual_claims(
                     story=candidate_story,
                     sql_result=context.sql_result,
+                    insight_analysis=context.insights,
                 )
 
                 if not factual_story_valid:

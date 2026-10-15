@@ -47,9 +47,21 @@ class FileDataSource(DataSource):
         suffix = self.file_path.suffix.lower()
 
         if suffix == ".csv":
-            dataframe = pd.read_csv(
-                self.file_path
-            )
+            try:
+                # Most CSV files are UTF-8.
+                dataframe = pd.read_csv(
+                    self.file_path,
+                    encoding="utf-8",
+                )
+
+            except UnicodeDecodeError:
+                # Some CSV files exported from Excel/Windows use
+                # Windows-1252 encoding instead of UTF-8.
+                dataframe = pd.read_csv(
+                    self.file_path,
+                    encoding="cp1252",
+                )
+
         else:
             dataframe = pd.read_excel(
                 self.file_path,

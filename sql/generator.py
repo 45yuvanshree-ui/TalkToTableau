@@ -840,6 +840,7 @@ The AnalyticalPlan is authoritative.
         schema
     )
 
+
     if schema.source_type == "sqlite":
         source_instructions = f"""
 The data source is SQLite.
@@ -851,25 +852,41 @@ ACTUAL SQLITE TABLES AND COLUMNS:
 Use ONLY these exact tables and columns.
 
 Never use:
-
-data.<table>
-
-Never invent:
-
-data.customers
-data.transactions
-data.schools
-data.frpm
-or any other table unless it is listed above.
+- data.<table>
+- invented tables not listed in the schema
 
 For SQLite:
-
-- use IIF(...)
+- use SQLite-compatible SQL
+- use IIF(...) rather than IF(...)
 - use normal single-quoted string literals
 - use backticks around identifiers containing special characters
-- do not use IF(...)
 - do not use parameter placeholders
 - do not use backslash-escaped SQL strings
+"""
+
+    elif schema.source_type in {"postgresql", "postgres"}:
+        source_instructions = f"""
+The data source is PostgreSQL.
+
+ACTUAL POSTGRESQL TABLES AND COLUMNS:
+
+{schema_description}
+
+Use ONLY the exact table names and column names listed in this schema.
+
+Rules:
+- Use PostgreSQL-compatible SQL.
+- Use the actual table names directly in FROM and JOIN clauses.
+- Do NOT use a synthetic table named "data".
+- Do NOT assume this is a file-based or DuckDB data source.
+- Use only declared columns and relationships.
+- Use a JOIN only when the requested metrics, dimensions, or filters
+  genuinely require multiple tables.
+- When joining tables, prefer the declared foreign-key relationships
+  when they match the intended relationship.
+- Use normal single-quoted string literals.
+- Do not use SQLite-only functions or identifier backticks.
+- Do not invent tables, columns, or join keys.
 """
 
     else:
@@ -888,6 +905,7 @@ Use "data" in the FROM clause.
 
 Do not use the original filename as a table name.
 """
+
 
     prompt = f"""
 ==================================================

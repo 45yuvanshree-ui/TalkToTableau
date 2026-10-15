@@ -1,3 +1,4 @@
+
 from data_sources.postgres_source import PostgresDataSource
 from schema import SchemaRetriever
 
@@ -17,35 +18,62 @@ def test_postgres_schema_is_normalized(monkeypatch):
 
         def execute(self, query):
             class FakeResult:
+                def __init__(self, rows):
+                    self.rows = rows
+
                 def fetchall(self):
-                    return [
+                    return self.rows
+
+            # Query 1: column metadata.
+            if "information_schema.columns" in query:
+                return FakeResult(
+                    [
                         (
                             "public",
                             "sales",
                             "sale_id",
                             "integer",
+                            "NO",
                         ),
                         (
                             "public",
                             "sales",
                             "sale_date",
                             "date",
+                            "YES",
                         ),
                         (
                             "public",
                             "sales",
                             "product",
                             "character varying",
+                            "YES",
                         ),
                         (
                             "public",
                             "sales",
                             "revenue",
                             "numeric",
+                            "NO",
                         ),
                     ]
+                )
 
-            return FakeResult()
+            # Query 2: primary-key metadata.
+            if "PRIMARY KEY" in query:
+                return FakeResult(
+                    [
+                        ("public", "sales", "sale_id"),
+                    ]
+                )
+
+            # Query 3: foreign-key metadata.
+            if "FOREIGN KEY" in query:
+                return FakeResult([])
+
+            raise AssertionError(
+                f"Unexpected PostgreSQL schema query: {query}"
+            )
 
     monkeypatch.setattr(
         "data_sources.postgres_source.psycopg.connect",
@@ -64,7 +92,6 @@ def test_postgres_schema_is_normalized(monkeypatch):
     )
 
     assert schema.source_type == "postgresql"
-
     assert len(schema.tables) == 1
 
     table = schema.tables[0]
@@ -82,3 +109,15 @@ def test_postgres_schema_is_normalized(monkeypatch):
         "product",
         "revenue",
     ]
+
+    # Ensure PostgreSQL primary-key metadata survives normalization.
+    sale_id_column = next(
+        column
+        for column in table.columns
+        if column.name == "sale_id"
+    )
+
+    assert sale_id_column.primary_key is True
+
+    # No foreign keys were returned by this fixture.
+    assert table.foreign_keys == []

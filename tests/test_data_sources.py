@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 import pandas as pd
@@ -121,26 +122,47 @@ def test_postgres_get_schema(monkeypatch):
             return False
 
         def execute(self, query):
-            assert "information_schema.columns" in query
+            assert isinstance(query, str)
 
             class Result:
+                def __init__(self, rows):
+                    self.rows = rows
+
                 def fetchall(self):
-                    return [
+                    return self.rows
+
+            # Query 1: column metadata.
+            if "information_schema.columns" in query:
+                return Result(
+                    [
                         (
                             "public",
                             "sales",
                             "region",
                             "character varying",
+                            "YES",
                         ),
                         (
                             "public",
                             "sales",
                             "revenue",
                             "numeric",
+                            "NO",
                         ),
                     ]
+                )
 
-            return Result()
+            # Query 2: primary-key metadata.
+            if "PRIMARY KEY" in query:
+                return Result([])
+
+            # Query 3: foreign-key metadata.
+            if "FOREIGN KEY" in query:
+                return Result([])
+
+            raise AssertionError(
+                f"Unexpected PostgreSQL schema query: {query}"
+            )
 
     monkeypatch.setattr(
         "data_sources.postgres_source.psycopg.connect",
@@ -158,9 +180,14 @@ def test_postgres_get_schema(monkeypatch):
     assert schema[0]["table_schema"] == "public"
     assert schema[0]["table_name"] == "sales"
     assert schema[0]["column_name"] == "region"
+    assert schema[0]["data_type"] == "character varying"
+    assert schema[0]["nullable"] is True
+    assert schema[0]["primary_key"] is False
+    assert schema[0]["foreign_keys"] == []
 
     assert schema[1]["column_name"] == "revenue"
     assert schema[1]["data_type"] == "numeric"
+    assert schema[1]["nullable"] is False
 
 
 def test_postgres_execute_returns_dataframe(monkeypatch):
